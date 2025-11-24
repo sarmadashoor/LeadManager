@@ -169,7 +169,7 @@ export class ShopMonkeyAdapter {
    * - Demo mode: Only test emails
    */
   async fetchWebsiteLeads(): Promise<CreateLeadData[]> {
-    const orders = await this.fetchOrders({ limit: 100 });
+    const orders = await this.fetchOrders({ limit: 500 });
     const leads: CreateLeadData[] = [];
 
     for (const order of orders) {
