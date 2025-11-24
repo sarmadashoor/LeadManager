@@ -1,12 +1,20 @@
 import 'dotenv/config';
 import { LeadPollingService } from './infrastructure/jobs/LeadPollingService';
 import { TouchPointProcessor, TouchPointAction } from './infrastructure/jobs/TouchPointProcessor';
+import { TwilioService } from './infrastructure/messaging/TwilioService';
+import { SendGridService } from './infrastructure/messaging/SendGridService';
 
 async function main() {
   console.log('Lead Orchestrator starting...');
 
   // Validate required environment variables
-  const requiredEnvVars = ['SHOPMONKEY_API_KEY', 'TENANT_ID'];
+  const requiredEnvVars = [
+    'SHOPMONKEY_API_KEY',
+    'TENANT_ID',
+    'SENDGRID_API_KEY',
+    'SENDGRID_FROM_EMAIL'
+  ];
+  
   for (const envVar of requiredEnvVars) {
     if (!process.env[envVar]) {
       console.error(`Missing required environment variable: ${envVar}`);
@@ -15,12 +23,32 @@ async function main() {
   }
 
   const tenantId = process.env.TENANT_ID!;
-  const demoMode = process.env.DEMO_MODE !== 'false'; // Default to true
+  const demoMode = process.env.DEMO_MODE !== 'false';
 
   console.log(`Configuration:`);
   console.log(`  - Tenant ID: ${tenantId}`);
   console.log(`  - Demo Mode: ${demoMode ? 'ON (only test leads)' : 'OFF (all leads)'}`);
   console.log(`  - Poll Interval: ${process.env.POLL_INTERVAL_SECONDS || 30}s`);
+
+  // Initialize Messaging Services
+  const sendGridService = new SendGridService({
+    apiKey: process.env.SENDGRID_API_KEY!,
+    fromEmail: process.env.SENDGRID_FROM_EMAIL!,
+    fromName: 'Tint World'
+  });
+
+  // Optional: Initialize Twilio if configured
+  let twilioService: TwilioService | null = null;
+  if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER) {
+    twilioService = new TwilioService({
+      accountSid: process.env.TWILIO_ACCOUNT_SID,
+      authToken: process.env.TWILIO_AUTH_TOKEN,
+      phoneNumber: process.env.TWILIO_PHONE_NUMBER
+    });
+    console.log('  - SMS: Enabled');
+  } else {
+    console.log('  - SMS: Disabled (no Twilio config)');
+  }
 
   // Initialize Lead Polling Service
   const pollingService = new LeadPollingService({
@@ -36,21 +64,45 @@ async function main() {
   // Initialize Touch Point Processor
   const touchPointProcessor = new TouchPointProcessor({
     tenantId,
-    processIntervalMs: 10000, // Check every 10 seconds
+    processIntervalMs: 10000,
     batchSize: 50
   });
 
-  // Set up touch point handler (placeholder for messaging integration)
+  // Set up touch point handler with both SMS and Email
   touchPointProcessor.setTouchPointHandler(async (action: TouchPointAction) => {
-    console.log(`[TouchPoint] Would send touch point ${action.touchPointNumber} to:`);
-    console.log(`  - Lead: ${action.leadId}`);
-    console.log(`  - Name: ${action.customerName || 'Unknown'}`);
-    console.log(`  - Email: ${action.customerEmail || 'None'}`);
-    console.log(`  - Phone: ${action.customerPhone || 'None'}`);
+    console.log(`[TouchPoint] Sending touch point ${action.touchPointNumber} to ${action.customerName}`);
     
-    // TODO: Integrate with Twilio/SendGrid in Phase 2
-    // For now, just log and return true (simulating sent)
-    return true;
+    const chatLink = `https://chat.tintworld.com/${action.leadId}`; // TODO: Real chat link
+    const { subject, text, html } = generateEmailContent(action.touchPointNumber, action.customerName, chatLink);
+    const smsBody = generateSmsContent(action.touchPointNumber, action.customerName, chatLink);
+
+    let emailSent = false;
+    let smsSent = false;
+
+    // Send Email
+    if (action.customerEmail) {
+      const emailResult = await sendGridService.sendEmail({
+        to: action.customerEmail,
+        subject,
+        text,
+        html
+      });
+      emailSent = emailResult.success;
+    } else {
+      console.log(`[TouchPoint] No email for lead ${action.leadId}`);
+    }
+
+    // Send SMS (if configured and phone available)
+    if (twilioService && action.customerPhone) {
+      const smsResult = await twilioService.sendSms({
+        to: action.customerPhone,
+        body: smsBody
+      });
+      smsSent = smsResult.success;
+    }
+
+    // Consider success if at least one channel worked
+    return emailSent || smsSent;
   });
 
   // Start services
@@ -69,6 +121,52 @@ async function main() {
 
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+}
+
+function generateSmsContent(touchPointNumber: number, customerName: string | null, chatLink: string): string {
+  const name = customerName ? customerName.split(' ')[0] : 'there';
+  
+  const messages: Record<number, string> = {
+    1: `Hi ${name}! Thanks for requesting a quote from Tint World. I'm here to help answer any questions and get your appointment scheduled. ${chatLink}`,
+    2: `Hi ${name}, just following up on your window tinting quote. Have any questions? ${chatLink}`,
+    3: `${name}, still interested in getting your windows tinted? I'm here to help! ${chatLink}`,
+  };
+
+  return messages[touchPointNumber] || 
+    `Hi ${name}, following up on your Tint World quote. Let me know if you'd like to schedule! ${chatLink}`;
+}
+
+function generateEmailContent(touchPointNumber: number, customerName: string | null, chatLink: string): {
+  subject: string;
+  text: string;
+  html: string;
+} {
+  const name = customerName ? customerName.split(' ')[0] : 'there';
+  
+  const subjects: Record<number, string> = {
+    1: 'Your Tint World Quote is Ready!',
+    2: 'Following up on your window tinting quote',
+    3: 'Still interested in window tinting?',
+  };
+
+  const subject = subjects[touchPointNumber] || 'Your Tint World Quote';
+
+  const text = `Hi ${name},\n\nThank you for requesting a quote from Tint World! We're excited to help you with your window tinting needs.\n\nI'm here to answer any questions you might have and help you schedule an appointment that works for you.\n\nClick here to chat with me: ${chatLink}\n\nLooking forward to hearing from you!\n\nBest regards,\nTint World Team`;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #333;">Hi ${name},</h2>
+      <p>Thank you for requesting a quote from Tint World! We're excited to help you with your window tinting needs.</p>
+      <p>I'm here to answer any questions you might have and help you schedule an appointment that works for you.</p>
+      <p style="text-align: center; margin: 30px 0;">
+        <a href="${chatLink}" style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Chat With Us Now</a>
+      </p>
+      <p>Looking forward to hearing from you!</p>
+      <p>Best regards,<br>Tint World Team</p>
+    </div>
+  `;
+
+  return { subject, text, html };
 }
 
 main().catch((err) => {
