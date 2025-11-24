@@ -1,6 +1,6 @@
 # Lead Orchestrator - Conversation Handoff Document
 
-**Last Updated:** November 23, 2025  
+**Last Updated:** November 24, 2025  
 **Purpose:** Enable seamless continuation in a new conversation
 
 ---
@@ -25,7 +25,11 @@
 | Lead Repository | Done + Tests | `src/infrastructure/persistence/repositories/LeadRepository.ts` |
 | Tenant Repository | Done + Tests | `src/infrastructure/persistence/repositories/TenantRepository.ts` |
 | ShopMonkey Adapter | Done | `src/infrastructure/crm/ShopMonkeyAdapter.ts` |
-| Database tests | 25 passing | `src/__tests__/` |
+| Touch Point Schedule | Done + Tests | `src/domain/TouchPointSchedule.ts` |
+| Lead Polling Service | Done | `src/infrastructure/jobs/LeadPollingService.ts` |
+| Touch Point Processor | Done | `src/infrastructure/jobs/TouchPointProcessor.ts` |
+| Main Entry Point | Done | `src/index.ts` |
+| Database tests | 35+ passing | `src/__tests__/` |
 | Architecture docs | Complete | `docs/architecture/` |
 
 ### 📁 Key Files
@@ -43,17 +47,26 @@ LeadManager/
 │   ├── MVP_LOGIC.md            # Business rules
 │   └── HANDOFF.md              # This file
 └── src/
+    ├── domain/
+    │   └── TouchPointSchedule.ts   # 13-touch schedule logic
     ├── infrastructure/
     │   ├── persistence/
     │   │   ├── db.ts
-    │   │   ├── migrations/     # 6 migration files
+    │   │   ├── migrations/     # 7 migration files
     │   │   └── repositories/
     │   │       ├── LeadRepository.ts
     │   │       └── TenantRepository.ts
-    │   └── crm/
-    │       └── ShopMonkeyAdapter.ts
+    │   ├── crm/
+    │   │   └── ShopMonkeyAdapter.ts
+    │   └── jobs/
+    │       ├── index.ts
+    │       ├── LeadPollingService.ts
+    │       └── TouchPointProcessor.ts
+    ├── index.ts                # Main entry point
     └── __tests__/
         ├── database.test.ts
+        ├── domain/
+        │   └── TouchPointSchedule.test.ts
         └── repositories/
             ├── LeadRepository.test.ts
             └── TenantRepository.test.ts
@@ -68,11 +81,14 @@ LeadManager/
 | `tenants` | Customer accounts (Tint World) |
 | `tenant_crm_configs` | CRM credentials per tenant |
 | `locations` | Franchise locations |
-| `leads` | Customer leads from CRM |
+| `leads` | Customer leads from CRM (with touch point fields) |
 | `chat_sessions` | AI chat conversations |
 | `job_executions` | Background job tracking |
 
-**All tables have `tenant_id` for multi-tenant isolation.**
+**New fields on `leads` table (migration 7):**
+- `touch_point_count` - Number of contacts made (0-13)
+- `next_touch_point_at` - When to send next follow-up
+- `last_contacted_at` - Last contact timestamp
 
 ---
 
@@ -98,40 +114,59 @@ order.name?.startsWith('New Quote')
 
 ---
 
-## Key Decisions Made
+## How the System Works
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Multi-tenancy | Shared DB, row-level | Industry standard, simpler ops |
-| MVP architecture | Concrete classes, no interfaces | Faster to ship, refactor later (~3hrs) |
-| Database | PostgreSQL + Knex | ACID compliance, good migrations |
-| Testing | Vitest | Fast, TypeScript-first |
-| CRM polling | 30 second interval | Balance speed vs API limits |
-| Demo mode | Default ON | Safety for development |
+### Lead Polling (every 30 seconds)
+1. `LeadPollingService` polls ShopMonkey for website leads
+2. New leads are imported via `LeadRepository.upsert()`
+3. Initial touch point is scheduled via `TouchPointSchedule`
+
+### Touch Point Processing (every 10 seconds)
+1. `TouchPointProcessor` finds leads due for touch points
+2. Executes touch point handler (sends message)
+3. Schedules next touch point based on 13-touch schedule
+4. Marks leads as `lost` after 13 touches with no response
+
+### 13-Touch Schedule
+| Touch | Day | Touch | Day |
+|-------|-----|-------|-----|
+| 1 | 0 | 8 | 16 |
+| 2 | 1 | 9 | 19 |
+| 3 | 3 | 10 | 22 |
+| 4 | 5 | 11 | 25 |
+| 5 | 7 | 12 | 27 |
+| 6 | 10 | 13 | 30 |
+| 7 | 13 | | |
 
 ---
 
 ## Next Steps (In Order)
 
-### 1. Add Touch Point Schema
-```sql
-ALTER TABLE leads ADD COLUMN touch_point_count INTEGER DEFAULT 0;
-ALTER TABLE leads ADD COLUMN next_touch_point_at TIMESTAMP;
+### 1. Run New Migration
+```bash
+npx knex migrate:latest
 ```
 
-### 2. Create Polling Job
-- Poll ShopMonkey every 30 seconds
-- Import new website leads
-- Use Bull queue for job scheduling
+### 2. Create Test Tenant
+```bash
+docker exec leadmanager-db psql -U leadmanager -d leadmanager -c \
+  "INSERT INTO tenants (slug, name) VALUES ('tintworld-store094', 'Tint World San Diego') RETURNING id;"
+```
+Then add the returned ID to `.env` as `TENANT_ID`.
 
-### 3. Create Touch Point Scheduler
-- Schedule follow-ups based on 13-touch schedule
-- Track which touch point each lead is on
+### 3. Test End-to-End
+```bash
+npm run dev
+```
+Should see:
+- Lead Orchestrator starting
+- Polling ShopMonkey every 30s
+- Processing touch points every 10s
 
 ### 4. Integrate Messaging (Phase 2)
 - Twilio for SMS
 - SendGrid for Email
-- Send AI chat link
+- Replace placeholder handler in `src/index.ts`
 
 ---
 
@@ -146,11 +181,17 @@ npx knex migrate:latest
 # Run tests
 npm test
 
+# Start application
+npm run dev
+
 # Test ShopMonkey connection
-npx tsx src/infrastructure/crm/test-shopmonkey.ts
+npx tsx src/test-shopmonkey.ts
 
 # Check DB tables
 docker exec leadmanager-db psql -U leadmanager -d leadmanager -c "\dt"
+
+# Check leads table structure
+docker exec leadmanager-db psql -U leadmanager -d leadmanager -c "\d leads"
 ```
 
 ---
@@ -163,17 +204,10 @@ NODE_ENV=development
 PORT=3000
 SHOPMONKEY_API_KEY=<your-key>
 SHOPMONKEY_BASE_URL=https://api.shopmonkey.cloud/v3
+TENANT_ID=<uuid-from-db>
 DEMO_MODE=true
+POLL_INTERVAL_SECONDS=30
 ```
-
----
-
-## To Continue Development
-
-1. Read `docs/MVP_LOGIC.md` for business rules
-2. Read `docs/architecture/PHASED_IMPLEMENTATION.md` for technical approach
-3. Run `npm test` to verify everything works
-4. Pick up from "Next Steps" above
 
 ---
 
@@ -191,4 +225,4 @@ If starting fresh, ask:
 1. "What's the current git status?"
 2. "Are Docker containers running?"
 3. "Do all tests pass?"
-4. Then continue from Next Steps
+4. Then continue from Next Steps above

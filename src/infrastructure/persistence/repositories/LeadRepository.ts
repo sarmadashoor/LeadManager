@@ -31,6 +31,10 @@ export interface Lead {
   created_at: Date;
   updated_at: Date;
   processed_at: Date | null;
+  // Touch point tracking
+  touch_point_count: number;
+  next_touch_point_at: Date | null;
+  last_contacted_at: Date | null;
 }
 
 export interface CreateLeadData {
@@ -158,6 +162,95 @@ export class LeadRepository {
       .update({
         status: 'contacted',
         invitation_sent_at: new Date(),
+        updated_at: new Date()
+      })
+      .returning('*');
+    return updated || null;
+  }
+
+  // ============ Touch Point Methods ============
+
+  /**
+   * Find leads that are due for their next touch point
+   * Returns leads where next_touch_point_at <= now and status allows follow-up
+   */
+  async findDueForTouchPoint(tenantId: string, limit: number = 100): Promise<Lead[]> {
+    const now = new Date();
+    return db('leads')
+      .where({ tenant_id: tenantId })
+      .whereIn('status', ['new', 'contacted']) // Only follow up on these statuses
+      .where('touch_point_count', '<', 13) // Max 13 touch points
+      .where('next_touch_point_at', '<=', now)
+      .orderBy('next_touch_point_at', 'asc')
+      .limit(limit);
+  }
+
+  /**
+   * Schedule the next touch point for a lead
+   * Uses the 13-touch schedule from MVP_LOGIC.md
+   */
+  async scheduleNextTouchPoint(
+    tenantId: string,
+    leadId: string,
+    nextTouchPointAt: Date
+  ): Promise<Lead | null> {
+    const [updated] = await db('leads')
+      .where({ tenant_id: tenantId, id: leadId })
+      .update({
+        next_touch_point_at: nextTouchPointAt,
+        updated_at: new Date()
+      })
+      .returning('*');
+    return updated || null;
+  }
+
+  /**
+   * Record that a touch point was sent
+   * Increments counter, updates timestamps, and schedules next touch point
+   */
+  async recordTouchPoint(
+    tenantId: string,
+    leadId: string,
+    nextTouchPointAt: Date | null
+  ): Promise<Lead | null> {
+    const now = new Date();
+    const [updated] = await db('leads')
+      .where({ tenant_id: tenantId, id: leadId })
+      .update({
+        touch_point_count: db.raw('touch_point_count + 1'),
+        last_contacted_at: now,
+        next_touch_point_at: nextTouchPointAt,
+        updated_at: now
+      })
+      .returning('*');
+    return updated || null;
+  }
+
+  /**
+   * Mark a lead as lost (no response after all touch points)
+   */
+  async markAsLost(tenantId: string, leadId: string): Promise<Lead | null> {
+    const [updated] = await db('leads')
+      .where({ tenant_id: tenantId, id: leadId })
+      .update({
+        status: 'lost',
+        next_touch_point_at: null,
+        updated_at: new Date()
+      })
+      .returning('*');
+    return updated || null;
+  }
+
+  /**
+   * Mark a lead as having responded (stops follow-up sequence)
+   */
+  async markAsResponded(tenantId: string, leadId: string): Promise<Lead | null> {
+    const [updated] = await db('leads')
+      .where({ tenant_id: tenantId, id: leadId })
+      .update({
+        status: 'chat_active',
+        first_response_at: new Date(),
+        next_touch_point_at: null, // Stop follow-ups
         updated_at: new Date()
       })
       .returning('*');

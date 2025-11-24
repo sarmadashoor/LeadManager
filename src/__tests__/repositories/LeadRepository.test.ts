@@ -210,4 +210,151 @@ describe('LeadRepository', () => {
       expect(updated!.invitation_sent_at).not.toBeNull();
     });
   });
+
+  // ============ Touch Point Tests ============
+
+  describe('findDueForTouchPoint', () => {
+    it('should find leads with next_touch_point_at in the past', async () => {
+      const pastDate = new Date(Date.now() - 60000); // 1 minute ago
+      const lead = await repo.create(tenantId, {
+        crm_source: 'shopmonkey',
+        crm_work_order_id: 'WO-DUE-001',
+        service_type: 'window-tinting',
+        status: 'new'
+      });
+
+      await repo.scheduleNextTouchPoint(tenantId, lead.id, pastDate);
+
+      const dueLeads = await repo.findDueForTouchPoint(tenantId);
+      expect(dueLeads.length).toBe(1);
+      expect(dueLeads[0].id).toBe(lead.id);
+    });
+
+    it('should not find leads with next_touch_point_at in the future', async () => {
+      const futureDate = new Date(Date.now() + 3600000); // 1 hour from now
+      const lead = await repo.create(tenantId, {
+        crm_source: 'shopmonkey',
+        crm_work_order_id: 'WO-FUTURE-001',
+        service_type: 'window-tinting',
+        status: 'new'
+      });
+
+      await repo.scheduleNextTouchPoint(tenantId, lead.id, futureDate);
+
+      const dueLeads = await repo.findDueForTouchPoint(tenantId);
+      expect(dueLeads.length).toBe(0);
+    });
+
+    it('should not find leads that have reached 13 touch points', async () => {
+      const pastDate = new Date(Date.now() - 60000);
+      const lead = await repo.create(tenantId, {
+        crm_source: 'shopmonkey',
+        crm_work_order_id: 'WO-MAXED-001',
+        service_type: 'window-tinting',
+        status: 'contacted'
+      });
+
+      // Manually set touch_point_count to 13
+      await db('leads').where({ id: lead.id }).update({ 
+        touch_point_count: 13,
+        next_touch_point_at: pastDate
+      });
+
+      const dueLeads = await repo.findDueForTouchPoint(tenantId);
+      expect(dueLeads.length).toBe(0);
+    });
+
+    it('should only find leads with eligible statuses', async () => {
+      const pastDate = new Date(Date.now() - 60000);
+      
+      // Create lead with 'lost' status (not eligible)
+      const lostLead = await repo.create(tenantId, {
+        crm_source: 'shopmonkey',
+        crm_work_order_id: 'WO-LOST-001',
+        service_type: 'window-tinting',
+        status: 'lost'
+      });
+      await repo.scheduleNextTouchPoint(tenantId, lostLead.id, pastDate);
+
+      // Create lead with 'new' status (eligible)
+      const newLead = await repo.create(tenantId, {
+        crm_source: 'shopmonkey',
+        crm_work_order_id: 'WO-NEW-001',
+        service_type: 'window-tinting',
+        status: 'new'
+      });
+      await repo.scheduleNextTouchPoint(tenantId, newLead.id, pastDate);
+
+      const dueLeads = await repo.findDueForTouchPoint(tenantId);
+      expect(dueLeads.length).toBe(1);
+      expect(dueLeads[0].id).toBe(newLead.id);
+    });
+  });
+
+  describe('recordTouchPoint', () => {
+    it('should increment touch_point_count and update timestamps', async () => {
+      const lead = await repo.create(tenantId, {
+        crm_source: 'shopmonkey',
+        crm_work_order_id: 'WO-TOUCH-001',
+        service_type: 'window-tinting'
+      });
+
+      expect(lead.touch_point_count).toBe(0);
+
+      const nextTime = new Date(Date.now() + 86400000); // Tomorrow
+      const updated = await repo.recordTouchPoint(tenantId, lead.id, nextTime);
+
+      expect(updated!.touch_point_count).toBe(1);
+      expect(updated!.last_contacted_at).not.toBeNull();
+      expect(updated!.next_touch_point_at).not.toBeNull();
+    });
+
+    it('should set next_touch_point_at to null when no more touch points', async () => {
+      const lead = await repo.create(tenantId, {
+        crm_source: 'shopmonkey',
+        crm_work_order_id: 'WO-TOUCH-002',
+        service_type: 'window-tinting'
+      });
+
+      const updated = await repo.recordTouchPoint(tenantId, lead.id, null);
+
+      expect(updated!.touch_point_count).toBe(1);
+      expect(updated!.next_touch_point_at).toBeNull();
+    });
+  });
+
+  describe('markAsLost', () => {
+    it('should update status and clear next touch point', async () => {
+      const lead = await repo.create(tenantId, {
+        crm_source: 'shopmonkey',
+        crm_work_order_id: 'WO-LOST-TEST-001',
+        service_type: 'window-tinting',
+        status: 'contacted'
+      });
+
+      await repo.scheduleNextTouchPoint(tenantId, lead.id, new Date());
+      const updated = await repo.markAsLost(tenantId, lead.id);
+
+      expect(updated!.status).toBe('lost');
+      expect(updated!.next_touch_point_at).toBeNull();
+    });
+  });
+
+  describe('markAsResponded', () => {
+    it('should update status and stop follow-ups', async () => {
+      const lead = await repo.create(tenantId, {
+        crm_source: 'shopmonkey',
+        crm_work_order_id: 'WO-RESPOND-001',
+        service_type: 'window-tinting',
+        status: 'contacted'
+      });
+
+      await repo.scheduleNextTouchPoint(tenantId, lead.id, new Date());
+      const updated = await repo.markAsResponded(tenantId, lead.id);
+
+      expect(updated!.status).toBe('chat_active');
+      expect(updated!.first_response_at).not.toBeNull();
+      expect(updated!.next_touch_point_at).toBeNull();
+    });
+  });
 });

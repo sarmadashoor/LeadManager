@@ -1,10 +1,12 @@
 {
 	"folders": [
 		{
-			"path": "../../../Downloads/files"
+			"name": "LeadManager",
+			"path": "../../../Downloads/LeadManager"
 		},
 		{
-			"path": "../../../Downloads/LeadManager"
+			"name": "files",
+			"path": "../../../Downloads/files"
 		}
 	],
 	"settings": {}
