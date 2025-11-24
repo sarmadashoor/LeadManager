@@ -28,9 +28,19 @@
 | Touch Point Schedule | Done + Tests | `src/domain/TouchPointSchedule.ts` |
 | Lead Polling Service | Done | `src/infrastructure/jobs/LeadPollingService.ts` |
 | Touch Point Processor | Done | `src/infrastructure/jobs/TouchPointProcessor.ts` |
+| Email Integration (SendGrid) | ✅ Working | `src/infrastructure/messaging/SendGridService.ts` |
+| SMS Integration (Twilio) | ⏳ Pending A2P | `src/infrastructure/messaging/TwilioService.ts` |
 | Main Entry Point | Done | `src/index.ts` |
-| Database tests | 35+ passing | `src/__tests__/` |
+| Database tests | 47 passing | `src/__tests__/` |
 | Architecture docs | Complete | `docs/architecture/` |
+
+### ⚠️ Known Issues
+
+| Issue | Impact | Solution |
+|-------|--------|----------|
+| ShopMonkey API Lag | 5-30 min delay from UI to API | Normal - keep polling, lead will appear |
+| Twilio A2P 10DLC | SMS not delivering | Complete registration (1-2 weeks) |
+| Email to Spam | Low initial deliverability | Authenticate domain in SendGrid |
 
 ### 📁 Key Files
 ```
@@ -58,6 +68,9 @@ LeadManager/
     │   │       └── TenantRepository.ts
     │   ├── crm/
     │   │   └── ShopMonkeyAdapter.ts
+    │   ├── messaging/
+    │   │   ├── SendGridService.ts  # Email (working)
+    │   │   └── TwilioService.ts    # SMS (pending A2P)
     │   └── jobs/
     │       ├── index.ts
     │       ├── LeadPollingService.ts
@@ -142,31 +155,34 @@ order.name?.startsWith('New Quote')
 
 ## Next Steps (In Order)
 
-### 1. Run New Migration
-```bash
-npx knex migrate:latest
-```
+### ✅ Already Done
+- Database migrations (7 total)
+- Tenant created (ID in .env)
+- Email integration working (SendGrid)
+- SMS integration configured (Twilio - awaiting A2P)
+- End-to-end tested successfully
 
-### 2. Create Test Tenant
-```bash
-docker exec leadmanager-db psql -U leadmanager -d leadmanager -c \
-  "INSERT INTO tenants (slug, name) VALUES ('tintworld-store094', 'Tint World San Diego') RETURNING id;"
-```
-Then add the returned ID to `.env` as `TENANT_ID`.
+### 🔜 Immediate Next Steps
 
-### 3. Test End-to-End
-```bash
-npm run dev
-```
-Should see:
-- Lead Orchestrator starting
-- Polling ShopMonkey every 30s
-- Processing touch points every 10s
+1. **Complete Twilio A2P 10DLC Registration** (1-2 weeks)
+   - Status: Awaiting approval
+   - Once approved, SMS will deliver automatically
 
-### 4. Integrate Messaging (Phase 2)
-- Twilio for SMS
-- SendGrid for Email
-- Replace placeholder handler in `src/index.ts`
+2. **Improve Email Deliverability**
+   - Authenticate domain in SendGrid (instead of single sender)
+   - Move emails from spam to primary inbox
+
+3. **Build AI Chat Interface**
+   - Currently using placeholder link: `https://chat.tintworld.com/{leadId}`
+   - Need actual chat UI with AI agent
+
+4. **Test with Real Customer** (after A2P approval)
+   - Turn off demo mode: `DEMO_MODE=false`
+   - Monitor first real lead through system
+
+5. **Add Appointment Booking**
+   - Integrate back with ShopMonkey calendar
+   - Update order status when appointment booked
 
 ---
 
@@ -202,11 +218,24 @@ DATABASE_URL=postgresql://leadmanager:leadmanager_dev@localhost:5432/leadmanager
 REDIS_URL=redis://localhost:6379
 NODE_ENV=development
 PORT=3000
+
+# ShopMonkey
 SHOPMONKEY_API_KEY=<your-key>
 SHOPMONKEY_BASE_URL=https://api.shopmonkey.cloud/v3
+
+# Lead Orchestrator
 TENANT_ID=<uuid-from-db>
 DEMO_MODE=true
 POLL_INTERVAL_SECONDS=30
+
+# SendGrid (Email)
+SENDGRID_API_KEY=<your-sendgrid-key>
+SENDGRID_FROM_EMAIL=<your-verified-email>
+
+# Twilio (SMS) - Optional
+TWILIO_ACCOUNT_SID=<your-account-sid>
+TWILIO_AUTH_TOKEN=<your-auth-token>
+TWILIO_PHONE_NUMBER=<your-twilio-number>
 ```
 
 ---
@@ -216,6 +245,30 @@ POLL_INTERVAL_SECONDS=30
 - **Test customer email:** sarmadashoor1@gmail.com
 - **Test customer name:** Sarmad Ashoor
 - **ShopMonkey location:** Tint World - Store094 (San Diego)
+- **Current tenant ID:** dea6e2aa-a961-4b4d-9df0-5329029abe13
+
+---
+
+## Important Notes
+
+### ShopMonkey API Lag
+- **Orders appear in ShopMonkey UI:** Instantly
+- **Orders appear in API response:** 5-30 minutes later
+- **Why:** API likely uses read replicas or caching
+- **Impact:** Normal delay - keep app running, it will pick up new leads automatically
+
+### Testing New Leads
+1. Create quote on Tint World website (use "Get Quote" flow)
+2. Verify it appears in ShopMonkey UI immediately
+3. Wait 5-30 minutes for API to update
+4. App will auto-detect and send email/SMS
+
+### Current System Status (Nov 24, 2025)
+- ✅ **Email:** Working (delivers to spam, normal for new sender)
+- ⏳ **SMS:** Configured but pending Twilio A2P 10DLC approval
+- ✅ **Polling:** Every 30 seconds (500 order limit)
+- ✅ **Touch Points:** 13-touch schedule active
+- ✅ **Demo Mode:** ON (safe for testing)
 
 ---
 
