@@ -1,8 +1,8 @@
 # Lead Orchestrator - Phased Implementation Guide
 
-**Version:** 1.0  
-**Last Updated:** November 23, 2025  
-**Status:** Phase 1 (MVP)
+**Version:** 1.1  
+**Last Updated:** November 25, 2025  
+**Status:** Phase 1 (MVP) - Webhooks Implemented
 
 ---
 
@@ -22,11 +22,16 @@ This document describes our **phased approach** to implementing the Lead Orchest
 │                     MVP Architecture                     │
 ├─────────────────────────────────────────────────────────┤
 │                                                          │
-│   ShopMonkey API                                        │
+│   ShopMonkey Webhooks (Real-time) ← PRIMARY             │
 │        │                                                 │
 │        ▼                                                 │
 │   ┌──────────────────┐                                  │
-│   │ ShopMonkeyAdapter │  ← Direct implementation        │
+│   │ Webhook Handler   │  ← HTTP endpoint (Fastify)      │
+│   └────────┬─────────┘                                  │
+│            │                                             │
+│            ▼                                             │
+│   ┌──────────────────┐                                  │
+│   │ ShopMonkeyAdapter │  ← Fetches customer/vehicle     │
 │   └────────┬─────────┘                                  │
 │            │                                             │
 │            ▼                                             │
@@ -38,6 +43,13 @@ This document describes our **phased approach** to implementing the Lead Orchest
 │   ┌──────────────────┐                                  │
 │   │    PostgreSQL     │                                  │
 │   └──────────────────┘                                  │
+│                                                          │
+│   ShopMonkey Polling (Every 30s) ← BACKUP               │
+│        │                                                 │
+│        └──────────────────────────────────┐             │
+│                                            │             │
+│                                            ▼             │
+│                                   (Same flow as above)   │
 │                                                          │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -57,16 +69,18 @@ src/
 │   │       └── JobExecutionRepository.ts
 │   ├── crm/
 │   │   └── ShopMonkeyAdapter.ts         # Direct implementation
+│   ├── webhooks/                        # NEW: Webhook handlers
+│   │   └── ShopMonkeyWebhookHandler.ts  # Real-time lead ingestion
 │   ├── messaging/
 │   │   ├── TwilioService.ts
 │   │   └── SendGridService.ts
+│   ├── jobs/
+│   │   ├── LeadPollingService.ts        # Backup polling
+│   │   └── TouchPointProcessor.ts
 │   └── queue/
 │       └── JobScheduler.ts
 ├── services/
 │   └── LeadOrchestrationService.ts      # Business logic
-├── api/
-│   └── routes/
-│       └── webhooks.ts
 └── __tests__/
     ├── database.test.ts
     ├── repositories/
@@ -81,10 +95,46 @@ src/
 |-----------|--------------|-------------------|
 | Repository interfaces | Concrete classes only | ILeadRepository interface |
 | CRM adapter interface | ShopMonkeyAdapter direct | ICRMAdapter interface |
+| Webhook interfaces | Direct Fastify handler | IWebhookHandler interface |
 | Domain models | TypeScript types | Full classes with methods |
 | Value objects | Plain strings | PhoneNumber, Email classes |
 | Domain events | None | Event bus pattern |
 | Tenant context middleware | Simple header check | Full middleware with caching |
+
+---
+
+## Recent Changes (Nov 25, 2025)
+
+### ✅ Webhook Integration Added
+
+**Problem Solved:**
+- ShopMonkey API had 5-30 minute lag
+- Broke the 30-second response time requirement
+- Polling couldn't solve this
+
+**Solution Implemented:**
+- Primary: ShopMonkey webhooks (instant notification)
+- Backup: Polling every 30 seconds (catches webhook failures)
+- Result: Lead response time reduced from 5-30 minutes to <1 second
+
+**Architecture Decisions:**
+1. ✅ **Additive, not destructive** - Webhooks added alongside polling
+2. ✅ **Defense in depth** - Polling remains as backup
+3. ✅ **No interfaces yet** - Direct implementation (MVP approach)
+4. ✅ **Fetches full data** - Webhook calls ShopMonkey API for customer/vehicle details
+5. ✅ **Same validation** - Uses identical lead qualification criteria
+
+**Files Added:**
+- `src/infrastructure/webhooks/ShopMonkeyWebhookHandler.ts` (~220 lines)
+
+**Files Modified:**
+- `src/index.ts` - Added Fastify server initialization
+- `src/infrastructure/crm/ShopMonkeyAdapter.ts` - Type safety fix
+
+**Deployment Requirements:**
+- Public HTTPS endpoint (ngrok for dev, DNS for production)
+- Webhook configured in ShopMonkey: Settings → Webhooks
+- Port 3000 exposed (configurable via WEBHOOK_PORT env var)
 
 ---
 
@@ -98,6 +148,7 @@ src/
 2. **Second tenant with different config** (e.g., different polling interval)
 3. **Unit testing requires mocking** (cannot test without real DB)
 4. **Team grows beyond 2 engineers** (need clearer contracts)
+5. **Second webhook provider** (e.g., different CRM with webhooks)
 
 ---
 
@@ -169,7 +220,26 @@ export class TekmetricAdapter implements ICRMAdapter { }
 
 ---
 
-### Step 3: Add Adapter Registry (30 min)
+### Step 3: Extract Webhook Interface (30 min)
+
+**When needed:**
+```typescript
+// src/domain/ports/IWebhookHandler.ts
+export interface IWebhookHandler {
+  handleWebhook(payload: WebhookPayload): Promise<WebhookResult>;
+  validateSignature(payload: any, signature: string): boolean;
+}
+
+// src/infrastructure/webhooks/ShopMonkeyWebhookHandler.ts
+export class ShopMonkeyWebhookHandler implements IWebhookHandler { }
+
+// src/infrastructure/webhooks/TekmetricWebhookHandler.ts (NEW)
+export class TekmetricWebhookHandler implements IWebhookHandler { }
+```
+
+---
+
+### Step 4: Add Adapter Registry (30 min)
 ```typescript
 // src/infrastructure/crm/CRMAdapterRegistry.ts
 export class CRMAdapterRegistry {
@@ -187,7 +257,7 @@ export class CRMAdapterRegistry {
 
 ---
 
-### Step 4: Add Dependency Injection (30 min)
+### Step 5: Add Dependency Injection (30 min)
 
 **Before:**
 ```typescript
@@ -215,9 +285,10 @@ export class LeadOrchestrationService {
 |------|------|-------------|
 | 1. Repository interfaces | 1 hour | Extract ILeadRepository, ITenantRepository |
 | 2. CRM adapter interface | 1 hour | Extract ICRMAdapter |
-| 3. Adapter registry | 30 min | Create CRMAdapterRegistry |
-| 4. Dependency injection | 30 min | Update services to use constructor injection |
-| **Total** | **~3 hours** | |
+| 3. Webhook interface | 30 min | Extract IWebhookHandler (when 2nd CRM added) |
+| 4. Adapter registry | 30 min | Create CRMAdapterRegistry |
+| 5. Dependency injection | 30 min | Update services to use constructor injection |
+| **Total** | **~3.5 hours** | |
 
 ---
 
@@ -245,6 +316,32 @@ return db('leads').insert(data); // INJECTION RISK!
 
 ---
 
+## Webhook-Specific Patterns
+
+### Defense in Depth
+```typescript
+// ✅ ALWAYS: Keep polling as backup
+// Primary: Webhooks (instant)
+// Backup: Polling (catches failures)
+
+// ✅ ALWAYS: Return 200 to webhook sender
+// Even on processing errors (prevents retries)
+return reply.code(200).send({ received: true, processed: false });
+
+// ✅ ALWAYS: Fetch full data from CRM
+// Webhook payload may be incomplete
+const customer = await shopMonkey.getCustomer(customerId);
+const vehicle = await shopMonkey.getVehicle(vehicleId);
+
+// ✅ ALWAYS: Validate webhook data
+// Don't trust external input
+if (!orderData.customerId) {
+  return reply.code(200).send({ received: true, processed: false });
+}
+```
+
+---
+
 ## Checklist: Before Adding Complexity
 
 Before abstracting, ask:
@@ -253,6 +350,7 @@ Before abstracting, ask:
 - [ ] Do we have multiple tenants with different configs?
 - [ ] Is the team struggling to understand the code?
 - [ ] Are we unable to write unit tests?
+- [ ] Do we need to support multiple webhook providers?
 
 **If all answers are "No" → Stay with MVP approach**
 
@@ -262,9 +360,12 @@ Before abstracting, ask:
 
 | Aspect | MVP (Now) | Full Architecture (Later) |
 |--------|-----------|---------------------------|
+| Lead Ingestion | Webhooks + Polling backup | Event-driven architecture |
 | Repositories | Concrete classes | Interface + Implementation |
 | CRM Adapters | ShopMonkeyAdapter only | ICRMAdapter + Registry |
+| Webhook Handlers | Direct Fastify handler | IWebhookHandler + Registry |
 | Testing | Integration tests | Unit + Integration tests |
-| Refactor Time | - | ~3 hours |
+| Refactor Time | - | ~3.5 hours |
+| Response Time | <1 second (webhooks) | <1 second (webhooks) |
 
-**Bottom Line:** Build correctly for current needs, with documented upgrade path.
+**Bottom Line:** Build correctly for current needs, with documented upgrade path. Webhooks added as pragmatic solution to critical business problem, following same MVP principles.
