@@ -1,8 +1,10 @@
 import 'dotenv/config';
+import Fastify from 'fastify';
 import { LeadPollingService } from './infrastructure/jobs/LeadPollingService';
 import { TouchPointProcessor, TouchPointAction } from './infrastructure/jobs/TouchPointProcessor';
 import { TwilioService } from './infrastructure/messaging/TwilioService';
 import { SendGridService } from './infrastructure/messaging/SendGridService';
+import { registerShopMonkeyWebhook } from './infrastructure/webhooks/ShopMonkeyWebhookHandler';
 
 async function main() {
   console.log('Lead Orchestrator starting...');
@@ -24,11 +26,33 @@ async function main() {
 
   const tenantId = process.env.TENANT_ID!;
   const demoMode = process.env.DEMO_MODE !== 'false';
+  const webhookPort = parseInt(process.env.WEBHOOK_PORT || '3000', 10);
 
   console.log(`Configuration:`);
   console.log(`  - Tenant ID: ${tenantId}`);
   console.log(`  - Demo Mode: ${demoMode ? 'ON (only test leads)' : 'OFF (all leads)'}`);
   console.log(`  - Poll Interval: ${process.env.POLL_INTERVAL_SECONDS || 30}s`);
+  console.log(`  - Webhook Port: ${webhookPort}`);
+
+  // Initialize Fastify server for webhooks
+  const fastify = Fastify({
+    logger: true
+  });
+
+  // Register webhook routes
+registerShopMonkeyWebhook(fastify, tenantId, {
+  apiKey: process.env.SHOPMONKEY_API_KEY!,
+  baseUrl: process.env.SHOPMONKEY_BASE_URL || 'https://api.shopmonkey.cloud/v3',
+  demoMode
+});
+  // Start Fastify server
+  try {
+    await fastify.listen({ port: webhookPort, host: '0.0.0.0' });
+    console.log(`✅ Webhook server listening on port ${webhookPort}`);
+  } catch (err) {
+    console.error('Failed to start webhook server:', err);
+    process.exit(1);
+  }
 
   // Initialize Messaging Services
   const sendGridService = new SendGridService({
@@ -50,7 +74,7 @@ async function main() {
     console.log('  - SMS: Disabled (no Twilio config)');
   }
 
-  // Initialize Lead Polling Service
+  // Initialize Lead Polling Service (continues as backup)
   const pollingService = new LeadPollingService({
     tenantId,
     shopMonkey: {
@@ -72,7 +96,7 @@ async function main() {
   touchPointProcessor.setTouchPointHandler(async (action: TouchPointAction) => {
     console.log(`[TouchPoint] Sending touch point ${action.touchPointNumber} to ${action.customerName}`);
     
-    const chatLink = `https://chat.tintworld.com/${action.leadId}`; // TODO: Real chat link
+    const chatLink = `https://chat.tintworld.com/${action.leadId}`;
     const { subject, text, html } = generateEmailContent(action.touchPointNumber, action.customerName, chatLink);
     const smsBody = generateSmsContent(action.touchPointNumber, action.customerName, chatLink);
 
@@ -105,17 +129,25 @@ async function main() {
     return emailSent || smsSent;
   });
 
-  // Start services
+  // Start background jobs
   pollingService.start();
   touchPointProcessor.start();
 
-  console.log('Lead Orchestrator running. Press Ctrl+C to stop.');
+  console.log('');
+  console.log('✅ Lead Orchestrator fully running:');
+  console.log(`   - Webhook server: http://localhost:${webhookPort}`);
+  console.log(`   - Webhook endpoint: http://localhost:${webhookPort}/webhooks/shopmonkey/order`);
+  console.log(`   - Polling: Every ${process.env.POLL_INTERVAL_SECONDS || 30}s (backup)`);
+  console.log(`   - Touch points: Every 10s`);
+  console.log('');
+  console.log('Press Ctrl+C to stop.');
 
   // Graceful shutdown
-  const shutdown = () => {
+  const shutdown = async () => {
     console.log('\nShutting down...');
     pollingService.stop();
     touchPointProcessor.stop();
+    await fastify.close();
     process.exit(0);
   };
 

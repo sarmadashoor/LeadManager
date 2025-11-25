@@ -62,20 +62,20 @@ export class ShopMonkeyAdapter {
     this.demoMode = config.demoMode ?? true;  // Default to demo mode for safety
   }
 
-  private async request<T>(endpoint: string): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`ShopMonkey API error: ${response.status} ${response.statusText}`);
+ private async request<T>(endpoint: string): Promise<T> {
+  const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    headers: {
+      'Authorization': `Bearer ${this.apiKey}`,
+      'Content-Type': 'application/json'
     }
+  });
 
-    return response.json();
+  if (!response.ok) {
+    throw new Error(`ShopMonkey API error: ${response.status} ${response.statusText}`);
   }
+
+  return response.json() as Promise<T>;
+}
 
   async fetchOrders(params: { limit?: number } = {}): Promise<ShopMonkeyOrder[]> {
     const queryParams = new URLSearchParams();
