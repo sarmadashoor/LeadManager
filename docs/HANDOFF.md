@@ -279,3 +279,29 @@ If starting fresh, ask:
 2. "Are Docker containers running?"
 3. "Do all tests pass?"
 4. Then continue from Next Steps above
+
+---
+
+## 🚨 CRITICAL ISSUE TO RESOLVE
+
+### ShopMonkey API Lag (5-30 minutes)
+
+**Problem:**
+- Orders appear in ShopMonkey UI instantly
+- Orders take 5-30 minutes to appear in API response
+- This breaks our 30-second response goal
+
+**Impact:**
+- Customer requests quote at 10:00 AM
+- We don't contact them until 10:05-10:30 AM
+- Defeats the purpose of instant response
+
+**Must Investigate:**
+1. Does ShopMonkey have **webhooks**? (instant notification)
+2. Is there a more real-time API endpoint?
+3. Can we filter by `createdDate` to bypass cache?
+4. Can we increase polling to every 5 seconds? (rate limits?)
+5. Contact ShopMonkey support - ask about API lag
+
+**This is the #1 priority to fix before production.**
+
