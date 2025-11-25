@@ -64,7 +64,8 @@ export function registerShopMonkeyWebhook(
           appointmentDates: orderData.appointmentDates?.length || 0,
           messageCount: orderData.messageCount,
           customerId: orderData.customerId,
-          vehicleId: orderData.vehicleId
+          vehicleId: orderData.vehicleId,
+          locationId: orderData.locationId
         }, '[Webhook] Order received');
 
         // Check if this is a website lead using comprehensive criteria
@@ -91,6 +92,32 @@ export function registerShopMonkeyWebhook(
         }
 
         fastify.log.info({ orderId: orderData.id }, '[Webhook] Website lead detected - fetching full data');
+
+        // ⭐ Look up location in our database using external_id (ShopMonkey location ID)
+        const location = await db('locations')
+          .where({
+            tenant_id: tenantId,
+            external_id: orderData.locationId
+          })
+          .first();
+
+        if (!location) {
+          fastify.log.error({ 
+            orderId: orderData.id, 
+            shopMonkeyLocationId: orderData.locationId 
+          }, '[Webhook] Location not found in database');
+          return reply.code(200).send({ 
+            received: true, 
+            processed: false, 
+            reason: 'Location not found' 
+          });
+        }
+
+        fastify.log.info({ 
+          orderId: orderData.id, 
+          locationId: location.id,
+          locationName: location.name
+        }, '[Webhook] Location found');
 
         // Fetch full customer and vehicle data from ShopMonkey API
         let customerData = null;
@@ -123,9 +150,12 @@ export function registerShopMonkeyWebhook(
           crm_work_order_number: orderData.number?.toString() || orderData.name,
           service_type: 'window-tinting',
           service_name: orderData.name || 'New Quote',
+          // ⭐ NEW: Include location_id (now required)
+          location_id: location.id,
           // Customer data (using adapter's extraction methods)
           customer_external_id: orderData.customerId,
-          customer_name: shopMonkey.extractCustomerName(customerData, orderData.generatedCustomerName || null),          customer_email: shopMonkey.extractCustomerEmail(customerData),
+          customer_name: shopMonkey.extractCustomerName(customerData, orderData.generatedCustomerName || null),
+          customer_email: shopMonkey.extractCustomerEmail(customerData),
           customer_phone: shopMonkey.extractCustomerPhone(customerData),
           // Vehicle data (convert null to undefined for type compatibility)
           vehicle_external_id: orderData.vehicleId || undefined,
