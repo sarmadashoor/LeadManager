@@ -1,39 +1,23 @@
 {
-  "name": "leadmanager",
+  "name": "lead-manager-workspace",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "dev:orchestrator": "npm run dev -w @lead-manager/orchestrator",
+    "dev:chat": "npm run dev -w @lead-manager/chat",
+    "dev:frontend": "npm run dev -w @lead-manager/frontend",
+    "dev:all": "npm run dev --workspaces",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "migrate": "npm run migrate -w @lead-manager/orchestrator",
+    "migrate:latest": "npm run migrate:latest -w @lead-manager/orchestrator",
+    "migrate:rollback": "npm run migrate:rollback -w @lead-manager/orchestrator"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/sarmadashoor/LeadManager.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/sarmadashoor/LeadManager/issues"
-  },
-  "homepage": "https://github.com/sarmadashoor/LeadManager#readme",
   "devDependencies": {
-    "@types/node": "^24.10.1",
-    "tsx": "^4.20.6",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.13"
-  },
-  "dependencies": {
-    "@sendgrid/mail": "^8.1.6",
-    "dotenv": "^17.2.3",
-    "fastify": "^5.6.2",
-    "knex": "^3.1.0",
-    "pg": "^8.16.3",
-    "twilio": "^5.10.6"
+    "typescript": "^5.3.0",
+    "@types/node": "^20.10.0"
   }
 }

@@ -9,3 +9,20 @@ dist/
 # Database
 *.sql
 shopmonkey-response*.json
+
+# Workspace-specific
+packages/*/node_modules
+packages/*/dist
+packages/*/.env
+
+# Test/temporary files
+*-services.json
+test-*.ts
+explore-*.ts
+fetch-*.ts
+check-*.ts
+view-*.ts
+*.sh
+
+# Migration artifacts
+backup-*

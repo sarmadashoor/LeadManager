@@ -4,7 +4,7 @@
     "module": "commonjs",
     "lib": ["ES2020"],
     "outDir": "./dist",
-    "rootDir": ".",
+    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -12,15 +12,9 @@
     "resolveJsonModule": true,
     "moduleResolution": "node",
     "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "composite": true
   },
-  "include": [],
-  "exclude": ["node_modules", "dist"],
-  "references": [
-    { "path": "./packages/orchestrator" },
-    { "path": "./packages/chat" },
-    { "path": "./packages/frontend" },
-    { "path": "./packages/shared" }
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "__tests__"]
 }
