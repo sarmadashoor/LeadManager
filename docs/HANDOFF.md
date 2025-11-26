@@ -1,7 +1,36 @@
-=# Lead Orchestrator - Conversation Handoff Document
+# Lead Orchestrator - Conversation Handoff Document
 
 **Last Updated:** November 26, 2025  
 **Purpose:** Enable seamless continuation in a new conversation
+
+---
+
+## Recent Progress (Nov 26, 2025)
+
+### ✅ Chat Package - Multi-Provider AI Complete
+
+**What was built:**
+- Multi-provider AI system (Claude Sonnet 4.5 + OpenAI GPT-4o)
+- Provider abstraction layer with clean interface
+- Toggle between providers via environment variable
+- Cost tracking and health monitoring
+- Database integration (shares PostgreSQL with orchestrator)
+- LeadContextRepository for fetching lead data
+- 10 tests passing (TDD approach)
+- Tested with REAL API calls - both providers working
+
+**Files created:**
+- `packages/chat/src/ai/providers/` - AIProvider interface, ClaudeProvider, OpenAIProvider
+- `packages/chat/src/ai/AIService.ts` - Main orchestrator
+- `packages/chat/src/config/ai-config.ts` - Configuration
+- `packages/chat/src/infrastructure/db.ts` - Database connection
+- `packages/chat/src/repositories/LeadContextRepository.ts` - Fetch lead context
+- `packages/chat/.env` - Environment configuration
+- Tests for all providers
+
+**Performance from real tests:**
+- Claude: 3.4s latency, 254 tokens, $0.005/msg, conversational style
+- OpenAI: 1.5s latency, 174 tokens, $0.002/msg, concise style
 
 ---
 
@@ -19,506 +48,427 @@
 ```
 LeadManager/
 ├── packages/
-│   ├── orchestrator/     # Lead management & webhooks
-│   ├── chat/            # AI chat service (ready to build)
+│   ├── orchestrator/     # Lead management & webhooks (✅ WORKING)
+│   ├── chat/            # AI chat service (✅ CORE COMPLETE - Nov 26)
 │   ├── frontend/        # React chat UI (ready to build)
-│   └── shared/          # Shared types & validation (ready to populate)
-├── package.json         # Workspace root
-└── docker-compose.yml   # PostgreSQL + Redis
+│   └── shared/          # Shared types (ready to populate)
 ```
 
 ---
 
 ## What's Been Built
 
-### ✅ Completed
+### ✅ Orchestrator Package (Complete)
+- Database schema (12 migrations)
+- Multi-tenant schema (ready for 200+ locations)
+- ShopMonkey integration (webhooks + polling)
+- Touch point system (13-touch schedule)
+- Email/SMS integration (SendGrid, Twilio)
+- Lead repository with tests
+- Polling and webhook handlers
 
-| Component | Status | Location |
-|-----------|--------|----------|
-| **Workspace Migration** | ✅ **Complete** | Nov 26, 2025 |
-| Database schema (12 migrations) | Done | `packages/orchestrator/src/infrastructure/persistence/migrations/` |
-| Multi-tenant schema | ✅ Complete | Migrations 8-12 |
-| PostgreSQL + Redis (Docker) | Running | `docker-compose.yml` |
-| Database connection | Tested | `packages/orchestrator/src/infrastructure/persistence/db.ts` |
-| Lead Repository | Done + Tests | `packages/orchestrator/src/infrastructure/persistence/repositories/LeadRepository.ts` |
-| Tenant Repository | Done + Tests | `packages/orchestrator/src/infrastructure/persistence/repositories/TenantRepository.ts` |
-| ShopMonkey Adapter | Done | `packages/orchestrator/src/infrastructure/crm/ShopMonkeyAdapter.ts` |
-| Touch Point Schedule | Done + Tests | `packages/orchestrator/src/domain/TouchPointSchedule.ts` |
-| **ShopMonkey Webhook Handler** | ✅ Working | `packages/orchestrator/src/infrastructure/webhooks/ShopMonkeyWebhookHandler.ts` |
-| Lead Polling Service | Done (backup) | `packages/orchestrator/src/infrastructure/jobs/LeadPollingService.ts` |
-| Touch Point Processor | Done | `packages/orchestrator/src/infrastructure/jobs/TouchPointProcessor.ts` |
-| Email Integration (SendGrid) | ✅ Working | `packages/orchestrator/src/infrastructure/messaging/SendGridService.ts` |
-| SMS Integration (Twilio) | ✅ Working | `packages/orchestrator/src/infrastructure/messaging/TwilioService.ts` |
-| Fastify Web Server | ✅ Running | `packages/orchestrator/src/index.ts` (port 3000) |
-| Chat Package | Ready | `packages/chat/` (empty, ready for implementation) |
-| Frontend Package | Ready | `packages/frontend/` (empty, ready for React UI) |
-| Shared Package | Ready | `packages/shared/` (empty, ready for types) |
+### ✅ Chat Package (Core Complete - Nov 26, 2025)
+- **Multi-Provider AI System**
+  - Claude Sonnet 4.5 integration
+  - OpenAI GPT-4o integration
+  - Provider abstraction layer
+  - Easy toggle via env var
+  
+- **Infrastructure**
+  - Database connection (shared with orchestrator)
+  - Configuration system
+  - LeadContextRepository
+  - Test utilities and mocks
+  
+- **Testing**
+  - 10 tests passing
+  - TDD approach established
+  - Real API integration tested
+  
+- **Documentation**
+  - README with usage examples
+  - Provider comparison data
+  - Troubleshooting guide
 
-### ⚠️ Known Issues
+### 🔜 Chat Package - Next Steps
+- REST API endpoints (Fastify routes)
+- Endpoint: `POST /api/chat/:leadId`
+- Health check endpoint
+- Integration with frontend
 
-| Issue | Impact | Solution |
-|-------|--------|----------|
-| ~~ShopMonkey API Lag~~ | ~~5-30 min delay~~ | ✅ **RESOLVED - Webhooks implemented** |
-| Twilio Sandbox Mode | SMS shows as sent but may not deliver | Use production phone number when ready |
-| Email to Spam | Low initial deliverability | Authenticate domain in SendGrid |
-| ngrok URL changes | Webhook breaks on restart | Use static domain for production |
-
-### 📁 Key Files & Structure
-```
-LeadManager/
-├── packages/
-│   ├── orchestrator/                    # Lead management service
-│   │   ├── src/
-│   │   │   ├── domain/
-│   │   │   │   └── TouchPointSchedule.ts
-│   │   │   ├── infrastructure/
-│   │   │   │   ├── persistence/
-│   │   │   │   │   ├── db.ts
-│   │   │   │   │   ├── migrations/      # 12 migration files
-│   │   │   │   │   └── repositories/
-│   │   │   │   │       ├── LeadRepository.ts
-│   │   │   │   │       └── TenantRepository.ts
-│   │   │   │   ├── crm/
-│   │   │   │   │   └── ShopMonkeyAdapter.ts
-│   │   │   │   ├── webhooks/
-│   │   │   │   │   └── ShopMonkeyWebhookHandler.ts
-│   │   │   │   ├── messaging/
-│   │   │   │   │   ├── SendGridService.ts
-│   │   │   │   │   └── TwilioService.ts
-│   │   │   │   └── jobs/
-│   │   │   │       ├── LeadPollingService.ts
-│   │   │   │       └── TouchPointProcessor.ts
-│   │   │   └── index.ts
-│   │   ├── .env                         # Environment config
-│   │   └── package.json
-│   │
-│   ├── chat/                            # Chat service (ready to build)
-│   │   ├── src/
-│   │   │   ├── api/                     # Chat API endpoints
-│   │   │   └── services/                # ChatService, AIService
-│   │   └── package.json
-│   │
-│   ├── frontend/                        # React chat UI (ready to build)
-│   │   ├── src/
-│   │   │   ├── components/
-│   │   │   └── App.tsx
-│   │   ├── index.html
-│   │   └── package.json
-│   │
-│   └── shared/                          # Shared types (ready to populate)
-│       ├── src/
-│       │   ├── types/                   # Lead, Customer, Vehicle, Service
-│       │   └── validation/              # Zod schemas
-│       └── package.json
-│
-├── docker-compose.yml                   # PostgreSQL + Redis
-├── knexfile.js                          # DB migrations config
-├── .env                                 # Root config (optional)
-├── package.json                         # Workspace root
-└── docs/
-    ├── architecture/
-    │   ├── SYSTEM_DESIGN.md
-    │   ├── PHASED_IMPLEMENTATION.md
-    │   └── QUICK_REFERENCE.md
-    ├── MVP_LOGIC.md
-    ├── next_steps.md
-    └── HANDOFF.md                       # This file
-```
+### 📦 Frontend Package (Ready to Build)
+- React chat UI
+- Connect to chat API
+- Message display and input
+- Conversation history
 
 ---
 
 ## Database Tables
 
-| Table | Purpose | Status |
-|-------|---------|--------|
-| `tenants` | Customer accounts (Tint World) | ✅ |
-| `tenant_crm_configs` | CRM credentials per tenant | ✅ |
-| `locations` | Franchise locations | ✅ |
-| `leads` | Customer leads from CRM (location_id required) | ✅ |
-| `chat_sessions` | AI chat conversations | ✅ |
-| `chat_messages` | Chat message history | ✅ (Migration 10) |
-| `location_hours` | Business hours per location | ✅ (Migration 8) |
-| `service_catalog` | Location-specific pricing | ✅ (Migration 9) |
-| `appointments` | Appointment bookings | ✅ (Migration 11) |
-| `job_executions` | Background job tracking | ✅ |
+**Orchestrator tables (Working):**
+- `tenants`, `tenant_crm_configs`, `locations`
+- `leads`, `chat_sessions`, `chat_messages`
+- `location_hours`, `service_catalog`, `appointments`
+- `job_executions`
 
-### Multi-Tenant Schema (Migrations 8-12 - Nov 25, 2025)
-
-**Migration 8: `location_hours`**
-- Business hours per location
-- Supports different hours per day
-- Day of week (0=Sunday, 6=Saturday)
-
-**Migration 9: `service_catalog`**
-- Location-specific or tenant-wide pricing
-- Service details (name, description, duration)
-- Display order and active status
-- Supports multiple service types (window-tinting, ppf, ceramic-coating)
-
-**Migration 10: `chat_messages`**
-- Stores AI conversation history
-- Links to chat_sessions and leads
-- Supports user, assistant, system roles
-- Metadata for AI context
-
-**Migration 11: `appointments`**
-- Multi-location appointment management
-- Links to tenant, location, lead, services
-- Status tracking (confirmed, cancelled, completed, no_show)
-- ShopMonkey sync tracking
-
-**Migration 12: Multi-tenant indexes**
-- Made `leads.location_id` required
-- Added indexes for tenant+location queries
-- Auto-populated Store094 leads with location
-
-**Schema now supports:**
-- ✅ Multiple franchises (e.g., 200+ Tint World locations)
-- ✅ Location-specific pricing
-- ✅ Location-specific business hours
-- ✅ Per-location appointment management
-- ✅ AI chat conversation storage
+**Chat access:**
+- Reads from same database
+- Uses `leads` table for context
+- Ready to use `chat_messages` for history
 
 ---
 
 ## ShopMonkey Integration
 
-### API Endpoints Used
-- `GET /v3/order` - Fetch orders (polling backup)
-- `GET /v3/customer/{id}` - Customer details
-- `GET /v3/vehicle/{id}` - Vehicle details
-- `GET /v3/canned_service` - Service catalog (23 tinting services found)
-- **Webhook:** `POST /webhooks/shopmonkey/order` - Real-time order events
+**Working:**
+- Webhooks (<1 second response time)
+- Polling backup (30 seconds)
+- Service catalog (23 services discovered via API)
+- Customer/vehicle data fetching
 
-### ShopMonkey Services Available
-- **23 window tinting services** configured in ShopMonkey
-- Services include: Ultimate Tint Package ($600), Supreme Tint Package ($450), Premium Tint Package ($300)
-- Services not marked as "bookable" but available via API
-- We fetch directly from ShopMonkey (no manual catalog needed)
+**Configuration:**
+- Webhook URL: Production needs static domain (not ngrok)
+- Events: Order events
+- Validation: Location must exist in DB
 
-### Website Lead Criteria
-```typescript
-// Accept both workflow statuses
-(order.workflowStatusId === '619813fb2c9c3e8ce527be48' ||  // Website Leads
- order.workflowStatusId === '65fb14d76ee665db4d8d2ce0') && // Appointments
-order.status === 'Estimate' &&
-order.authorized === false &&
-order.messageCount === 0 &&
-order.name?.startsWith('New Quote') &&
-// Safety: No actual appointment scheduled
-(!order.appointmentDates || order.appointmentDates.length === 0) &&
-order.invoiced === false &&
-order.paid === false
+---
+
+## Environment Configuration
+
+### Orchestrator (`packages/orchestrator/.env`)
+```env
+DATABASE_URL=postgresql://...
+SHOPMONKEY_API_KEY=xxx
+SENDGRID_API_KEY=xxx
+TWILIO_ACCOUNT_SID=xxx
+TWILIO_AUTH_TOKEN=xxx
+TWILIO_PHONE_NUMBER=+1xxx
+TENANT_ID=xxx
+DEMO_MODE=true
 ```
 
-### Demo Mode
-- **ON by default** - Only processes `sarmadashoor1@gmail.com`
-- Prevents accidental contact with real customers
-
-### Webhook Configuration
-- **Location:** ShopMonkey → Settings → Webhooks
-- **Name:** Lead Manager - Store094
-- **URL:** `https://your-domain.com/webhooks/shopmonkey/order` (production)
-- **URL:** `https://xxx.ngrok-free.dev/webhooks/shopmonkey/order` (development)
-- **Events:** Order
-- **Status:** Enabled ✅
-- **Validation:** Checks location exists before creating lead
-
----
-
-## How the System Works
-
-### Lead Ingestion (Primary: Webhooks)
-1. Customer submits quote on Tint World website
-2. ShopMonkey sends webhook to our endpoint **instantly** (<1 second)
-3. `ShopMonkeyWebhookHandler` receives order event
-4. **Handler validates location exists in our database**
-5. Handler fetches full customer and vehicle data from ShopMonkey API
-6. Lead imported via `LeadRepository.upsert()` with location_id
-7. Initial touch point scheduled via `TouchPointSchedule`
-8. **Result:** Customer contacted within 1 second ✅
-
-### Lead Ingestion (Backup: Polling)
-1. `LeadPollingService` polls ShopMonkey every 30 seconds
-2. Catches any leads that webhooks missed
-3. Same processing flow as webhooks
-4. **Typical usage:** <1% of leads (webhook failures only)
-
-### Touch Point Processing (every 10 seconds)
-1. `TouchPointProcessor` finds leads due for touch points
-2. Executes touch point handler (sends message)
-3. Schedules next touch point based on 13-touch schedule
-4. Marks leads as `lost` after 13 touches with no response
-
-### 13-Touch Schedule
-| Touch | Day | Touch | Day |
-|-------|-----|-------|-----|
-| 1 | 0 | 8 | 16 |
-| 2 | 1 | 9 | 19 |
-| 3 | 3 | 10 | 22 |
-| 4 | 5 | 11 | 25 |
-| 5 | 7 | 12 | 27 |
-| 6 | 10 | 13 | 30 |
-| 7 | 13 | | |
-
----
-
-## Next Steps (In Order)
-
-### ✅ Recently Completed (Nov 26, 2025)
-- ✅ **Workspace migration** - Converted to npm workspaces (4 packages)
-- ✅ **Orchestrator isolated** - Moved to `packages/orchestrator/`
-- ✅ **Chat package ready** - Empty structure in `packages/chat/`
-- ✅ **Frontend package ready** - Empty structure in `packages/frontend/`
-- ✅ **Shared package ready** - Empty structure in `packages/shared/`
-- ✅ **All tests passing** - Orchestrator running normally
-- ✅ **ShopMonkey services discovered** - 23 tinting services available via API
-
-### 🔜 Immediate Next Steps
-
-1. **Extract Shared Types** (2-3 hours)
-   - Move Lead, Customer, Vehicle types to `@lead-manager/shared`
-   - Update imports in orchestrator package
-   - Add Zod validation schemas
-
-2. **Extend ShopMonkeyAdapter** (1 hour)
-   - Add `getCannedServices()` method
-   - Add `getTintingServices()` helper
-   - Test service fetching
-
-3. **Model AI Conversations** (1-2 days)
-   - Design prompt templates
-   - Plan conversation flows
-   - Define function calling structure
-   - Test with sample scenarios
-
-4. **Choose AI Provider** (1 day)
-   - Test Claude API (Anthropic)
-   - Test OpenAI GPT-4o
-   - Compare quality, cost, latency
-   - Make final decision
-
-5. **Build Chat Service** (Week 1-2)
-   - Implement ChatService in `packages/chat`
-   - Build Chat API endpoints
-   - Integrate chosen AI provider
-   - Test with real ShopMonkey services
-
-6. **Build React Frontend** (Week 2-3)
-   - Create chat UI in `packages/frontend`
-   - Connect to chat API
-   - Test end-to-end
-
-7. **Deploy to Production**
-   - Set up static domain (not ngrok)
-   - Configure webhook with production URL
-   - Monitor for 24 hours
-   - Turn off demo mode when ready
+### Chat (`packages/chat/.env`)
+```env
+AI_PROVIDER=claude
+ANTHROPIC_API_KEY=sk-ant-xxx
+OPENAI_API_KEY=sk-xxx
+AI_FALLBACK_PROVIDER=openai
+DATABASE_URL=postgresql://...
+```
 
 ---
 
 ## Commands Reference
-
-### Workspace Commands
 ```bash
 # Start orchestrator
-npm run dev:orchestrator
+cd packages/orchestrator
+npm run dev
 
-# Start chat service (when built)
-npm run dev:chat
+# Test chat with Claude
+cd packages/chat
+npm run demo
 
-# Start frontend (when built)
-npm run dev:frontend
+# Test chat with OpenAI
+AI_PROVIDER=openai npm run demo
 
-# Run all services
-npm run dev:all
-
-# Run database migrations
-npm run migrate
-
-# Run all tests
+# Run tests
 npm test
 
-# Build all packages
-npm run build
-
-# Install dependency in specific package
-npm install <package> -w @lead-manager/orchestrator
-npm install <package> -w @lead-manager/chat
-```
-
-### Database Commands
-```bash
-# Start database
+# Run database
 docker compose up -d
-
-# Check DB tables
-docker exec leadmanager-db psql -U leadmanager -d leadmanager -c "\dt"
-
-# Check leads table
-docker exec leadmanager-db psql -U leadmanager -d leadmanager -c "\d leads"
-
-# Check locations
-docker exec leadmanager-db psql -U leadmanager -d leadmanager -c "SELECT * FROM locations;"
 ```
 
-### Development Commands
+---
+
+## Next Development Priorities
+
+### 1. Chat REST API (2-3 hours) 🎯 NEXT
+**Goal:** HTTP endpoints for frontend to call
+
+**Tasks:**
+- Create `packages/chat/src/api/routes.ts`
+- Endpoint: `POST /api/chat/:leadId` - send message, get AI response
+- Endpoint: `GET /api/health` - check provider health
+- Start server: `packages/chat/src/server.ts`
+
+**Implementation:**
+```typescript
+// POST /api/chat/:leadId
+{
+  message: "How much for tint?",
+  conversationHistory: []
+}
+// Returns: { response: "...", provider: "claude", ... }
+```
+
+### 2. React Chat UI (1 day)
+**Goal:** Customer-facing chat interface
+
+**Location:** `packages/frontend/`
+
+**Tasks:**
+- Chat window component
+- Message display
+- Input field with send button
+- Load conversation history
+- Connect to chat API
+
+### 3. Integration (1 day)
+**Goal:** End-to-end flow working
+
+**Tasks:**
+- Orchestrator generates chat link with lead ID
+- Email includes link: `https://chat.tintworld.com/:leadId`
+- Frontend loads, fetches lead context
+- Customer chats with AI
+- Eventually: booking flow
+
+---
+
+## Testing Strategy
+
+**Orchestrator:** Some tests exist, need expansion
+**Chat:** 10 tests passing, TDD established
+**Frontend:** Will need component tests
+**Integration:** Manual testing initially, then automated
+
+---
+
+## Known Issues & Considerations
+
+### Working Well ✅
+- Webhooks (instant lead capture)
+- Multi-provider AI (both tested)
+- Database schema (multi-tenant ready)
+- Touch point system
+
+### Needs Attention ⚠️
+- Demo mode still ON (only processes test email)
+- Twilio in sandbox mode
+- Need static domain for webhooks (using ngrok currently)
+- Chat API endpoints not built yet
+- Frontend not started
+
+### Future Enhancements
+- A/B testing between AI providers
+- Conversation caching
+- Advanced analytics
+- Additional providers (Gemini, etc.)
+
+---
+
+## Key Files & Locations
+```
+LeadManager/
+├── packages/
+│   ├── orchestrator/
+│   │   ├── src/
+│   │   │   ├── infrastructure/
+│   │   │   │   ├── webhooks/ShopMonkeyWebhookHandler.ts
+│   │   │   │   ├── crm/ShopMonkeyAdapter.ts
+│   │   │   │   ├── persistence/repositories/
+│   │   │   │   └── messaging/
+│   │   │   └── domain/TouchPointSchedule.ts
+│   │   └── .env
+│   │
+│   ├── chat/
+│   │   ├── src/
+│   │   │   ├── ai/
+│   │   │   │   ├── providers/ (AIProvider, Claude, OpenAI)
+│   │   │   │   └── AIService.ts
+│   │   │   ├── repositories/LeadContextRepository.ts
+│   │   │   ├── infrastructure/db.ts
+│   │   │   └── demo.ts
+│   │   ├── .env
+│   │   └── README.md (comprehensive guide)
+│   │
+│   └── docs/
+│       ├── HANDOFF.md (this file)
+│       ├── MVP_LOGIC.md
+│       └── next_steps.md
+```
+
+---
+
+## Success Metrics
+
+**Current Status:**
+- ✅ <1 second lead response time (webhooks)
+- ✅ 100% webhook success rate (with polling backup)
+- ✅ Multi-provider AI working (tested)
+- ✅ Database multi-tenant ready
+- 🔜 Chat API endpoints (next)
+- 🔜 Customer engagement via chat
+- 🔜 Appointment booking
+
+---
+
+## For Next Conversation
+
+**Start here:**
+1. Review `packages/chat/README.md` for what's built
+2. Review `next_steps.md` for priorities
+3. Decide: Build chat API or frontend first?
+
+**Quick verification:**
 ```bash
-# Expose webhook endpoint (development)
-ngrok http 3000
-
-# Test webhook endpoint
-curl http://localhost:3000/health
+cd packages/chat
+npm test          # Should see 10 tests passing
+npm run demo      # Should get AI response
 ```
 
----
-
-## Environment Setup
-
-### Root `.env` (Optional)
-```env
-# Can be empty or contain shared config
-```
-
-### `packages/orchestrator/.env` (Required)
-```env
-DATABASE_URL=postgresql://leadmanager:leadmanager_dev@localhost:5432/leadmanager
-REDIS_URL=redis://localhost:6379
-NODE_ENV=development
-PORT=3000
-
-# Webhook server
-WEBHOOK_PORT=3000
-
-# ShopMonkey
-SHOPMONKEY_API_KEY=<your-key>
-SHOPMONKEY_BASE_URL=https://api.shopmonkey.cloud/v3
-
-# Lead Orchestrator
-TENANT_ID=<uuid-from-db>
-DEMO_MODE=true
-POLL_INTERVAL_SECONDS=30
-
-# SendGrid (Email)
-SENDGRID_API_KEY=<your-sendgrid-key>
-SENDGRID_FROM_EMAIL=<your-verified-email>
-
-# Twilio (SMS)
-TWILIO_ACCOUNT_SID=<your-account-sid>
-TWILIO_AUTH_TOKEN=<your-auth-token>
-TWILIO_PHONE_NUMBER=<your-twilio-number>
-```
+**Questions to ask:**
+- "What's the current status of the chat package?"
+- "Show me how to test provider switching"
+- "Let's build the REST API endpoints"
+- "How do we integrate chat with orchestrator?"
 
 ---
 
-## Test Data
+## Detailed Feature Status
 
-- **Test customer email:** sarmadashoor1@gmail.com
-- **Test customer name:** Sarmad Ashoor
-- **Test customer phone:** +16193071648
-- **ShopMonkey location:** Tint World - Store094 (San Diego)
-- **Location external_id:** 6198139a5391fa197fac13e7
-- **Current tenant ID:** dea6e2aa-a961-4b4d-9df0-5329029abe13
+### Orchestrator - What Works
+✅ **Webhook Handler**
+- Receives ShopMonkey order events
+- <1 second response time
+- Validates location exists
+- Creates lead in database
+
+✅ **Polling System**
+- Backup for missed webhooks
+- Runs every 30 seconds
+- Fetches new orders since last poll
+- Prevents duplicates
+
+✅ **Touch Point System**
+- 13-touch schedule over 30 days
+- Email + SMS cadence
+- Configurable timing
+- Status tracking
+
+✅ **Database Schema**
+- Multi-tenant architecture
+- 12 migrations complete
+- Ready for 200+ locations
+- Optimistic locking
+- Job execution tracking
+
+✅ **ShopMonkey Integration**
+- API adapter complete
+- Service catalog (23 services)
+- Customer data fetching
+- Vehicle info retrieval
+
+✅ **Messaging**
+- SendGrid email integration
+- Twilio SMS integration
+- Template system
+- Delivery tracking
+
+### Chat - What Works
+✅ **AI Providers**
+- Claude Sonnet 4.5 (tested, working)
+- OpenAI GPT-4o (tested, working)
+- Clean abstraction layer
+- Easy to add more providers
+
+✅ **Configuration**
+- Environment-based
+- Toggle providers instantly
+- Fallback support
+- Model overrides
+
+✅ **Database Access**
+- Shared PostgreSQL
+- Lead context fetching
+- Repository pattern
+
+✅ **Testing**
+- 10 tests passing
+- TDD approach
+- Mock utilities
+- Integration tested
+
+### Chat - What's Missing
+❌ REST API endpoints
+❌ Server setup
+❌ Frontend integration
+❌ Conversation history storage
+❌ Appointment booking logic
+
+### Frontend - Not Started
+❌ React components
+❌ Chat UI
+❌ API integration
+❌ Routing
+❌ Styling
 
 ---
 
-## Important Notes
+## Technical Debt / Improvements
 
-### Workspace Structure
-- **4 packages:** orchestrator, chat, frontend, shared
-- **Independent deployments:** Each package can be deployed separately
-- **Shared types:** Common types live in `@lead-manager/shared`
-- **Easy to split:** Can move to separate repos later if needed
+### Testing
+- [ ] Add integration tests for chat API
+- [ ] Add tests for LeadContextRepository with real DB
+- [ ] Add frontend component tests
+- [ ] End-to-end test: webhook → email → chat → booking
 
-### Webhook vs Polling
-- **Webhooks (Primary):** <1 second response time, 99%+ of leads
-- **Polling (Backup):** 30 second response time, catches webhook failures
-- **Why both?** Defense in depth - ensures no leads are ever missed
-
-### Multi-Tenant Architecture
-- All queries scope by `tenant_id` first
-- Leads require `location_id` (enforced at DB level)
-- Service catalog supports location-specific pricing
-- System ready for 200+ franchise locations
-
-### ShopMonkey Services
-- 23 tinting services available via `/v3/canned_service` API
-- No manual data entry needed (fetch from ShopMonkey)
-- Services not marked "bookable" but usable for quotes
-- Pricing ranges from $109 to $600
-
-### Testing New Leads
-1. Create quote on Tint World website (use "Get Quote" flow)
-2. Webhook arrives **instantly** (<1 second)
-3. Webhook validates location exists
-4. Check logs: `[Webhook] Location found` then `[Webhook] ✅ New lead imported`
-5. Email sent within 10 seconds (via TouchPointProcessor)
-6. If webhook fails: Polling catches it within 30 seconds
-
-### Current System Status (Nov 26, 2025)
-- ✅ **Workspace Migration:** Complete
-- ✅ **Webhooks:** Working - instant lead ingestion (<1 sec)
-- ✅ **Polling:** Working - backup mechanism (30 sec)
-- ✅ **Email:** Working
-- ✅ **SMS:** Working (may be sandbox mode)
-- ✅ **Touch Points:** 13-touch schedule active
-- ✅ **Demo Mode:** ON (safe for testing)
-- ✅ **Response Time Goal:** ACHIEVED (<1 second)
-- ✅ **Multi-Tenant Schema:** Complete
-- ✅ **Service Discovery:** 23 ShopMonkey services found
-- 🔜 **Chat Service:** Ready to build
-
----
-
-## Questions to Ask in New Conversation
-
-If starting fresh, ask:
-1. "What's the current git status?"
-2. "Are Docker containers running?" (`docker compose ps`)
-3. "Can orchestrator start?" (`npm run dev:orchestrator`)
-4. "Are migrations current?" (`npm run migrate`)
-5. "What's the next priority?" (likely chat implementation)
-6. Then continue from Next Steps above
-
----
-
-## 📊 System Metrics
+### Configuration
+- [ ] Add TypeScript path aliases (`@/` imports)
+- [ ] Set up ESLint + Prettier
+- [ ] Add pre-commit hooks (husky)
 
 ### Performance
-- **Lead response time:** <1 second (webhook) / 30 seconds (polling)
-- **Touch point processing:** Every 10 seconds
-- **Webhook success rate:** 99%+
-- **Database migrations:** 12 total, all applied
+- [ ] Add Redis caching for ShopMonkey service catalog
+- [ ] Implement conversation caching
+- [ ] Add rate limiting to chat API
 
-### Architecture
-- **Packages:** 4 (orchestrator, chat, frontend, shared)
-- **Services:** PostgreSQL, Redis, Fastify
-- **Deployment:** Ready for production (needs static domain)
-- **Scalability:** Multi-tenant ready (200+ locations)
+### Monitoring
+- [ ] Add logging (winston or pino)
+- [ ] Track AI provider usage/costs
+- [ ] Set up error tracking (Sentry?)
+- [ ] Add health check endpoints
 
 ---
 
-## ✅ RESOLVED: ShopMonkey API Lag Issue
+## Deployment Preparation
 
-### Original Problem (Nov 24, 2025)
-- Orders appeared in ShopMonkey UI instantly
-- Orders took 5-30 minutes to appear in API response
-- Broke our 30-second response goal
-- Polling couldn't solve this
+### Infrastructure
+- [ ] Static domain for webhooks (replace ngrok)
+- [ ] Deploy orchestrator (VPS or container)
+- [ ] Deploy chat service (separate container)
+- [ ] Deploy frontend (Vercel/Cloudflare Pages)
+- [ ] Configure CDN for frontend assets
 
-### Solution Implemented (Nov 25, 2025)
-✅ **ShopMonkey webhooks integrated**
-- Real-time order notifications (<1 second)
-- Fetches full customer/vehicle data on webhook receipt
-- Polling retained as backup mechanism
-- Comprehensive lead validation (9 criteria)
-- Location validation before lead creation
+### Security
+- [ ] API authentication (JWT tokens?)
+- [ ] Rate limiting on endpoints
+- [ ] CORS configuration
+- [ ] Environment variable management (Vault?)
 
-### Results
-- **Response time:** 5-30 minutes → <1 second ✅
-- **Reliability:** 99%+ (webhooks) + 100% (polling backup)
-- **Architecture:** Event-driven with fallback
-- **Multi-tenant ready:** Yes
-- **Production ready:** Yes (needs static domain deployment)
+### Monitoring
+- [ ] Uptime monitoring (UptimeRobot)
+- [ ] Error tracking (Sentry)
+- [ ] Log aggregation (CloudWatch, Datadog)
+- [ ] Cost tracking dashboard
 
-**This was the #1 priority issue and is now RESOLVED.** ✅
+---
+
+## Questions to Answer
+
+### Technical Decisions
+1. **Chat communication:** REST polling (current plan) or WebSockets?
+2. **Authentication:** How to secure chat endpoints? JWT? Magic links?
+3. **ShopMonkey appointment API:** Does it exist? Need to research.
+4. **A/B testing:** When to enable automated provider testing?
+
+### Business Decisions
+5. **Demo mode:** When to turn off and go live?
+6. **Twilio production:** Get A2P approval for SMS?
+7. **Domain setup:** What domain for chat? `chat.tintworld.com`?
+8. **Pricing model:** How to bill customers? Per lead? Per location?
+
+---
+
+**All systems operational. Ready for next phase of development.** 🚀

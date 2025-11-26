@@ -253,264 +253,79 @@ LeadManager/
 
 ---
 
-## Phase 2: Chat Implementation (Current Focus)
+## Phase 2: Chat Implementation (IN PROGRESS)
 
-### Chat Package Structure (Ready to Build)
+### ✅ Chat Core Complete (Nov 26, 2025)
+
+**What Was Built:**
+- Multi-provider AI system (Claude Sonnet 4.5 + OpenAI GPT-4o)
+- Provider abstraction layer (AIProvider interface)
+- Toggle between providers via environment variable
+- Cost tracking and health monitoring per provider
+- Database integration (shared PostgreSQL with orchestrator)
+- LeadContextRepository for fetching lead data
+- 10 tests passing (TDD approach)
+- Tested with REAL API calls - both providers working
+
+**Chat Package Structure (Implemented):**
 ```
 packages/chat/
 ├── src/
-│   ├── api/
-│   │   ├── ChatController.ts      # REST endpoints
-│   │   ├── routes.ts              # Fastify routes
-│   │   └── middleware/            # Auth, validation
-│   ├── services/
-│   │   ├── ChatService.ts         # Conversation management
-│   │   ├── AIService.ts           # AI provider integration
-│   │   └── ContextBuilder.ts      # Load customer/vehicle/services
-│   ├── prompts/
-│   │   ├── system.ts              # System prompts
-│   │   ├── functions.ts           # Function calling definitions
-│   │   └── templates.ts           # Prompt templates
-│   └── index.ts                   # Package entry point
-├── .env                           # Chat-specific config
-└── package.json
+│   ├── ai/
+│   │   ├── providers/
+│   │   │   ├── AIProvider.ts          # Interface ✅
+│   │   │   ├── ClaudeProvider.ts      # Claude implementation ✅
+│   │   │   ├── OpenAIProvider.ts      # OpenAI implementation ✅
+│   │   │   └── index.ts               # Factory ✅
+│   │   └── AIService.ts               # Orchestrator ✅
+│   ├── config/
+│   │   └── ai-config.ts               # Environment config ✅
+│   ├── infrastructure/
+│   │   └── db.ts                      # Database connection ✅
+│   ├── repositories/
+│   │   └── LeadContextRepository.ts   # Fetch lead data ✅
+│   ├── __tests__/                     # Test utilities ✅
+│   └── demo.ts                        # Demo script ✅
+├── .env                               # Chat-specific config ✅
+└── package.json                       # Dependencies ✅
 ```
 
-### Implementation Steps
+**Performance Results (Real API Tests):**
+- Claude: 3.4s latency, 254 tokens, $0.005/msg, conversational style
+- OpenAI: 1.5s latency, 174 tokens, $0.002/msg, concise style
 
-**Week 1: Foundation**
-1. Extract shared types to `@lead-manager/shared`
-2. Add `getCannedServices()` to ShopMonkeyAdapter
-3. Model AI conversations
-4. Choose AI provider (Claude vs OpenAI)
+**Architecture Decisions:**
+1. ✅ **Multi-provider support** - Easy to add Gemini, Llama, etc.
+2. ✅ **Shared database** - Chat reads from same PostgreSQL as orchestrator
+3. ✅ **TDD approach** - All new code test-driven (10 tests passing)
+4. ✅ **Configuration-driven** - Toggle providers via env var
+5. ✅ **Cost tracking** - Built-in per provider
 
-**Week 2: Chat Backend**
-1. Build ChatService with AI integration
-2. Create Chat API endpoints
-3. Implement context loading
-4. Test with real ShopMonkey services
+### 🔜 Chat Remaining Work (Next 1-2 Weeks)
 
-**Week 3: Frontend**
+**Week 1: REST API (2-3 hours)**
+1. ✅ AI providers working (DONE)
+2. ✅ Database integration (DONE)
+3. ✅ Tests passing (DONE)
+4. ⏳ Create REST API endpoints:
+   - `POST /api/chat/:leadId` - Send message, get AI response
+   - `GET /api/health` - Check provider health
+   - `GET /api/chat/:leadId/history` - Conversation history
+5. ⏳ Start Fastify server
+6. ⏳ Test with curl/Postman
+
+**Week 2-3: Frontend (1 day)**
 1. Build React chat UI in `packages/frontend`
-2. Connect to chat API
-3. Implement polling (3-second intervals)
-4. End-to-end testing
+2. Chat window component
+3. Message display
+4. Input field
+5. Connect to chat API
+6. Polling (2-3 second intervals)
 
----
-
-## Phase 3: Abstraction Trigger
-
-### When to Abstract
-
-**Add interfaces when ANY of these occur:**
-
-1. **Second CRM needed** (e.g., Tekmetric customer signs up)
-2. **Second tenant with different config** (e.g., different polling interval)
-3. **Unit testing requires mocking** (cannot test without real DB)
-4. **Team grows beyond 2 engineers** (need clearer contracts)
-5. **Second webhook provider** (e.g., different CRM with webhooks)
-6. **Package publishing** (need stable interfaces for npm packages)
-
----
-
-## Refactoring Guide: MVP → Full Architecture
-
-### Step 1: Extract Repository Interfaces (1 hour)
-
-**Before (MVP):**
-```typescript
-// packages/orchestrator/src/infrastructure/persistence/repositories/LeadRepository.ts
-import { db } from '../db';
-
-export class LeadRepository {
-  async findByTenant(tenantId: string) {
-    return db('leads').where({ tenant_id: tenantId });
-  }
-
-  async create(tenantId: string, data: CreateLeadData) {
-    return db('leads').insert({ ...data, tenant_id: tenantId }).returning('*');
-  }
-}
-```
-
-**After (Full Architecture):**
-```typescript
-// packages/shared/src/repositories/ILeadRepository.ts
-export interface ILeadRepository {
-  findByTenant(tenantId: string): Promise<Lead[]>;
-  create(tenantId: string, data: CreateLeadData): Promise<Lead>;
-}
-
-// packages/orchestrator/src/infrastructure/persistence/repositories/LeadRepository.ts
-import { ILeadRepository } from '@lead-manager/shared/repositories';
-
-export class LeadRepository implements ILeadRepository {
-  // Same implementation, now implements interface
-}
-```
-
----
-
-### Step 2: Extract CRM Adapter Interface (1 hour)
-
-**Before (MVP):**
-```typescript
-// packages/orchestrator/src/infrastructure/crm/ShopMonkeyAdapter.ts
-export class ShopMonkeyAdapter {
-  async fetchNewLeads(since: Date): Promise<Lead[]> { }
-  async getCustomer(customerId: string): Promise<Customer> { }
-  async getCannedServices(locationId: string): Promise<Service[]> { }
-}
-```
-
-**After (Full Architecture):**
-```typescript
-// packages/shared/src/ports/ICRMAdapter.ts
-export interface ICRMAdapter {
-  fetchNewLeads(since: Date): Promise<Lead[]>;
-  getCustomer(customerId: string): Promise<Customer>;
-  getVehicle(vehicleId: string): Promise<Vehicle>;
-  getCannedServices(locationId: string): Promise<Service[]>;
-  createAppointment(lead: Lead, appointment: AppointmentData): Promise<void>;
-}
-
-// packages/orchestrator/src/infrastructure/crm/ShopMonkeyAdapter.ts
-export class ShopMonkeyAdapter implements ICRMAdapter { }
-
-// Future: packages/orchestrator/src/infrastructure/crm/TekmetricAdapter.ts
-export class TekmetricAdapter implements ICRMAdapter { }
-```
-
----
-
-### Step 3: Publish Shared Package (2 hours)
-
-**When you need stable interfaces:**
-```typescript
-// packages/shared/package.json
-{
-  "name": "@lead-manager/shared",
-  "version": "1.0.0",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "files": ["dist"],
-  "scripts": {
-    "build": "tsc",
-    "prepublishOnly": "npm run build"
-  }
-}
-
-// Other packages use published version
-// packages/chat/package.json
-{
-  "dependencies": {
-    "@lead-manager/shared": "^1.0.0"  // Specific version instead of "*"
-  }
-}
-```
-
----
-
-## Refactoring Summary
-
-| Step | Time | Description |
-|------|------|-------------|
-| 1. Repository interfaces | 1 hour | Extract to `@lead-manager/shared` |
-| 2. CRM adapter interface | 1 hour | Extract ICRMAdapter |
-| 3. Webhook interface | 30 min | Extract IWebhookHandler (when 2nd CRM added) |
-| 4. Adapter registry | 30 min | Create CRMAdapterRegistry |
-| 5. Dependency injection | 30 min | Update services to use constructor injection |
-| 6. Publish shared package | 2 hours | Build, version, publish to npm |
-| **Total** | **~5.5 hours** | |
-
----
-
-## Code Quality Rules (Both Phases)
-
-### Always Required
-```typescript
-// ✅ ALWAYS: Tenant scoping on every query
-async findByStatus(tenantId: string, status: string) {
-  return db('leads').where({ tenant_id: tenantId, status });
-}
-
-// ❌ NEVER: Query without tenant_id
-async findByStatus(status: string) {
-  return db('leads').where({ status }); // DATA LEAK RISK!
-}
-```
-```typescript
-// ✅ ALWAYS: Input validation
-const validated = CreateLeadSchema.parse(data);
-
-// ❌ NEVER: Trust raw input
-return db('leads').insert(data); // INJECTION RISK!
-```
-```typescript
-// ✅ ALWAYS: Use workspace package names
-import { Lead } from '@lead-manager/shared/types';
-
-// ❌ AVOID: Relative imports across packages
-import { Lead } from '../../../shared/src/types/Lead';
-```
-
----
-
-## Workspace-Specific Patterns
-
-### Package Dependencies
-```typescript
-// ✅ Chat can depend on shared
-// packages/chat/package.json
-{
-  "dependencies": {
-    "@lead-manager/shared": "*"
-  }
-}
-
-// ✅ Orchestrator can depend on shared
-// packages/orchestrator/package.json
-{
-  "dependencies": {
-    "@lead-manager/shared": "*"
-  }
-}
-
-// ❌ Orchestrator should NOT depend on chat
-// Keeps packages independent
-```
-
-### Development Workflow
-```bash
-# ✅ Start specific package
-npm run dev:orchestrator
-npm run dev:chat
-
-# ✅ Test specific package
-npm run test -w @lead-manager/orchestrator
-
-# ✅ Install dependency in specific package
-npm install axios -w @lead-manager/chat
-
-# ✅ Build all packages
-npm run build
-```
-
----
-
-## Checklist: Before Adding Complexity
-
-Before abstracting, ask:
-
-- [ ] Do we have a second CRM to integrate?
-- [ ] Do we have multiple tenants with different configs?
-- [ ] Is the team struggling to understand the code?
-- [ ] Are we unable to write unit tests?
-- [ ] Do we need to support multiple webhook providers?
-- [ ] Are we publishing packages to npm?
-- [ ] Do we have 3+ engineers working on different packages?
-
-**If all answers are "No" → Stay with MVP approach**
+**Integration (1 day):**
+1. Update orchestrator email with chat link
+2. End-to-end testing
+3. Deploy
 
 ---
 
@@ -519,28 +334,33 @@ Before abstracting, ask:
 | Aspect | MVP (Now) | Full Architecture (Later) |
 |--------|-----------|---------------------------|
 | Structure | Monorepo workspaces (4 packages) | Same + published packages |
-| Lead Ingestion | Webhooks + Polling backup | Event-driven architecture |
-| Repositories | Concrete classes | Interface + Implementation |
-| CRM Adapters | ShopMonkeyAdapter only | ICRMAdapter + Registry |
-| Webhook Handlers | Direct Fastify handler | IWebhookHandler + Registry |
-| Testing | Integration tests | Unit + Integration tests |
-| Package Management | Workspace "*" dependencies | Versioned npm packages |
+| Lead Ingestion | Webhooks + Polling backup ✅ | Event-driven architecture |
+| Repositories | Concrete classes ✅ | Interface + Implementation |
+| CRM Adapters | ShopMonkeyAdapter only ✅ | ICRMAdapter + Registry |
+| Webhook Handlers | Direct Fastify handler ✅ | IWebhookHandler + Registry |
+| **AI Chat** | **Multi-provider core ✅ (NEW)** | **REST API + Frontend** |
+| Testing | Integration tests + TDD (10 tests) ✅ | Unit + Integration tests |
+| Package Management | Workspace "*" dependencies ✅ | Versioned npm packages |
 | Refactor Time | - | ~5.5 hours |
-| Response Time | <1 second (webhooks) | <1 second (webhooks) |
+| Response Time | <1 second (webhooks) ✅ | <1 second (webhooks) |
 | Deployment | Monorepo (same deploy) | Independent package deploys |
 
 ---
 
-## Next Phase: Chat Implementation
+## Next Immediate Steps
 
-**Current Status:** Workspace structure complete, orchestrator running, ready to build chat
+**Current Status:** Chat core complete (AI providers working), ready for REST API
 
-**Next Steps:**
-1. Extract shared types to `@lead-manager/shared`
-2. Extend ShopMonkeyAdapter with `getCannedServices()`
-3. Model AI conversations
-4. Choose AI provider
-5. Build chat service in `packages/chat`
-6. Build React UI in `packages/frontend`
+**Next Steps (Priority Order):**
+1. **REST API endpoints** (2-3 hours) 🎯 NEXT
+   - `POST /api/chat/:leadId`
+   - Fastify server setup
+   - Test with curl
+2. **React Frontend** (1 day)
+   - Chat UI components
+   - Connect to API
+3. **Integration** (1 day)
+   - Email with chat link
+   - End-to-end testing
 
-**Timeline:** 2-3 weeks to working chat
+**Timeline:** 1 week to working chat interface

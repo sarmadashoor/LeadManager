@@ -1,339 +1,441 @@
 # Lead Orchestrator - Next Steps
 
-**Created:** November 25, 2025  
-**Status:** Multi-tenant schema complete, ready for chat implementation  
-**For:** Next conversation/developer handoff
+**Last Updated:** November 26, 2025  
+**Status:** Chat core complete, ready for API & frontend
 
 ---
 
-## What Was Just Completed ✅
+## What Was Just Completed ✅ (Nov 26, 2025)
 
-### Webhooks (Nov 25, 2025)
-- ✅ Real-time lead ingestion (<1 second response time)
-- ✅ Webhook handler with comprehensive validation
-- ✅ Polling retained as backup mechanism
-- ✅ Production-ready (needs static domain)
+### Multi-Provider AI Chat System
+- ✅ AIProvider interface (clean abstraction)
+- ✅ ClaudeProvider implementation (Anthropic Claude Sonnet 4.5)
+- ✅ OpenAIProvider implementation (OpenAI GPT-4o)
+- ✅ AIService orchestrator (provider selection, fallback)
+- ✅ Configuration system (environment-based)
+- ✅ Database integration (shared PostgreSQL)
+- ✅ LeadContextRepository (fetch lead data from DB)
+- ✅ 10 tests passing (TDD approach established)
+- ✅ Real API testing (both providers confirmed working)
+- ✅ Cost tracking (built-in per provider)
+- ✅ Health monitoring (check provider availability)
 
-### Multi-Tenant Schema (Nov 25, 2025 - Migrations 8-12)
-- ✅ `location_hours` table - Business hours per location
-- ✅ `service_catalog` table - Location-specific pricing
-- ✅ `chat_messages` table - AI conversation history
-- ✅ `appointments` table - Booking management
-- ✅ `leads.location_id` required - Multi-tenant enforcement
-- ✅ Indexes for tenant+location queries
-- ✅ Webhook validates location before creating leads
+**Performance verified:**
+- Claude: 3.4s, 254 tokens, $0.005/msg, conversational
+- OpenAI: 1.5s, 174 tokens, $0.002/msg, concise
 
-**Result:** System ready for 200+ franchise locations with location-specific pricing.
-
----
-
-## What's Next: AI Chat Interface 🎯
-
-**Priority:** #1 - Critical for customer engagement
-
-**Status:** Database ready, implementation needed
+**Result:** Can toggle between AI providers with single env var. System ready for REST API layer.
 
 ---
 
-## Prerequisites Before Building Chat
+## Immediate Next Steps (Priority Order)
 
-These must be answered/completed before implementation:
+### 1. Chat REST API (2-3 hours) 🎯 NEXT
+**Goal:** HTTP endpoints for frontend to call
 
-### 1. **Choose AI Provider** (Decision Required)
-**Options:**
-- Anthropic Claude API (excellent for conversations, what we use)
-- OpenAI GPT-4 (widely used, good docs)
-- Open source (Llama, Mistral - more control, hosting needed)
+**What to build:**
+```
+POST /api/chat/:leadId
+- Fetches lead context from DB
+- Sends message to AI
+- Returns AI response
+- Saves to chat_messages table
 
-**Considerations:**
-- Cost per message
-- Response quality for automotive services
-- Rate limits
-- API reliability
+GET /api/health
+- Checks provider health
+- Returns status of Claude & OpenAI
 
-**Question for next conversation:** "Which AI provider should we use and why?"
-
----
-
-### 2. **Real-Time Communication Approach** (Decision Required)
-**Options:**
-- **WebSockets** - True real-time, more complex
-- **Server-Sent Events (SSE)** - One-way server→client, simpler
-- **REST + Polling** - Simplest, slight delay
-
-**Recommendation:** Start with REST + short polling (2-3 seconds), upgrade to WebSockets later if needed.
-
-**Question for next conversation:** "What level of real-time communication do we need?"
-
----
-
-### 3. **Populate Service Catalog** (Data Needed)
-**Current state:** `service_catalog` table exists but is empty
-
-**Need from Tint World:**
-- List of all services (window tinting, PPF, ceramic coating, etc.)
-- Pricing for each service
-- Duration for each service
-- Does pricing vary by location? (San Diego vs Phoenix)
-
-**Action required:**
-```sql
--- Example of what we need to populate:
-INSERT INTO service_catalog (tenant_id, location_id, service_type, name, description, base_price_cents, duration_minutes)
-VALUES 
-  ('tenant-uuid', 'location-uuid', 'window-tinting', 'Full Car Ceramic Tint', 'Premium ceramic...', 39900, 180),
-  ('tenant-uuid', 'location-uuid', 'window-tinting', 'Front Windows Only', 'Front 2 windows', 19900, 90);
+GET /api/chat/:leadId/history
+- Fetches conversation history
+- Returns all messages for session
 ```
 
-**Question for next conversation:** "Can you provide Tint World's service catalog data?"
+**Files to create:**
+- `packages/chat/src/api/routes.ts` - Fastify route definitions
+- `packages/chat/src/api/controllers/ChatController.ts` - Business logic
+- `packages/chat/src/server.ts` - Start HTTP server
 
----
-
-### 4. **Populate Location Hours** (Data Needed)
-**Current state:** `location_hours` table exists but is empty
-
-**Need from Tint World:**
-- Store094 business hours (Mon-Sun)
-- Are they closed any days?
-
-**Action required:**
-```sql
--- Example:
-INSERT INTO location_hours (location_id, day_of_week, opens_at, closes_at, is_closed)
-VALUES 
-  ('location-uuid', 1, '09:00', '18:00', false), -- Monday
-  ('location-uuid', 2, '09:00', '18:00', false), -- Tuesday
-  -- ... etc
+**Test:**
+```bash
+curl -X POST http://localhost:3001/api/chat/LEAD_ID \
+  -H "Content-Type: application/json" \
+  -d '{"message": "How much for ceramic tint?"}'
 ```
 
-**Question for next conversation:** "What are Store094's business hours?"
+---
+
+### 2. React Chat UI (1 day)
+**Goal:** Customer-facing chat interface
+
+**Location:** `packages/frontend/`
+
+**Components needed:**
+```
+src/components/
+├── ChatWindow.tsx       # Main chat container
+├── MessageList.tsx      # Display messages
+├── MessageInput.tsx     # Input field + send
+├── TypingIndicator.tsx  # "AI is typing..."
+└── ChatHeader.tsx       # Customer name, vehicle
+```
+
+**API Integration:**
+```typescript
+// Fetch lead context on mount
+const { customer, services } = await fetch(`/api/chat/${leadId}/context`);
+
+// Send message
+const response = await fetch(`/api/chat/${leadId}`, {
+  method: 'POST',
+  body: JSON.stringify({ message: userInput })
+});
+
+// Poll for new messages
+setInterval(() => {
+  fetch(`/api/chat/${leadId}/messages?after=${lastMessageId}`)
+}, 2000);
+```
 
 ---
 
-### 5. **Research ShopMonkey APIs** (Investigation Needed)
-**Need to determine:**
-- Does ShopMonkey have an appointment booking API?
-- Can we create appointments programmatically?
-- Can we add messages to orders via API?
-- Can we update order workflow status?
+### 3. Orchestrator → Chat Integration (2-3 hours)
+**Goal:** Connect lead flow to chat
 
-**Action required:**
-1. Review ShopMonkey API documentation
-2. Test if appointment creation is possible
-3. Determine what we can sync back to ShopMonkey
+**Changes needed in orchestrator:**
 
-**Question for next conversation:** "Have you checked ShopMonkey's API docs for appointment/messaging capabilities?"
+**File:** `packages/orchestrator/src/infrastructure/messaging/SendGridService.ts`
 
----
+Update email to include chat link:
+```typescript
+const chatLink = `${process.env.CHAT_URL}/${lead.id}`;
 
-### 6. **Design Chat UX Flow** (Planning Needed)
-**Questions to answer:**
-- What should the chat greeting say?
-- How do we guide customers to booking?
-- What if customer asks off-topic questions?
-- When do we offer human handoff?
-- What's the booking confirmation flow?
+const emailContent = `
+Hi ${lead.customer_name},
 
-**Recommendation:** Create a simple flow diagram before building.
+Thanks for your interest! I can answer questions about your 
+${lead.vehicle_year} ${lead.vehicle_make} ${lead.vehicle_model}.
 
----
+Chat with me: ${chatLink}
 
-## Technical Implementation Plan (After Prerequisites)
+- Tint World Team
+`;
+```
 
-### Phase 1: Basic Chat (Week 1)
-**Goal:** Customer can chat, AI responds
-
-1. Create chat frontend (React)
-   - Simple message interface
-   - Load lead context
-   - Display conversation history
-
-2. Create chat API endpoints
-   - `GET /api/chat/session/:leadId` - Load context
-   - `POST /api/chat/message` - Send message, get AI response
-
-3. Integrate AI provider
-   - Configure API keys
-   - Build prompt with context (customer, vehicle, services)
-   - Handle AI responses
-
-4. Test end-to-end
-   - Customer clicks link → Chat loads → Messages work
-
-**Deliverable:** Working chat that answers questions about services
+**Environment variable:**
+```bash
+# packages/orchestrator/.env
+CHAT_URL=http://localhost:3000/chat
+# Production: https://chat.tintworld.com
+```
 
 ---
 
-### Phase 2: Service Information (Week 1-2)
-**Goal:** AI can answer pricing/service questions
+### 4. Appointment Booking Flow (3-4 hours)
+**Goal:** Customer can book via chat
 
-1. Load service catalog in chat context
-2. AI can query services and provide accurate pricing
-3. Test with real Tint World services
+**What happens:**
+1. Customer asks about booking
+2. AI detects intent: "Would you like to schedule?"
+3. AI shows available times (from `location_hours` table)
+4. Customer selects time
+5. AI creates appointment in `appointments` table
+6. AI syncs to ShopMonkey (if API available)
+7. Confirmation email/SMS sent
 
-**Deliverable:** AI accurately answers "How much for full car tint?"
-
----
-
-### Phase 3: Appointment Booking (Week 2-3)
-**Goal:** Customer can book appointments
-
-1. Check availability
-   - Query `appointments` table for booked slots
-   - Show available times
-
-2. Create appointment
-   - Save to `appointments` table
-   - Update lead status to `appointment_scheduled`
-   - Stop touch point sequence
-
-3. Confirmation
-   - Send email/SMS confirmation
-   - Provide appointment details
-
-**Deliverable:** Customer can book and receive confirmation
+**Needs:**
+- Availability checking logic
+- Appointment creation in DB
+- ShopMonkey sync (research API)
+- Notification service call
 
 ---
 
-### Phase 4: ShopMonkey Sync (Week 3)
-**Goal:** ShopMonkey knows about appointments
+## Technical Debt / Improvements
 
-1. Research ShopMonkey API capabilities
-2. Implement sync:
-   - Post message to ShopMonkey order when customer responds
-   - Create appointment in ShopMonkey (if API exists)
-   - Update order status
+### Testing
+- [ ] Add integration tests for chat API
+- [ ] Add tests for LeadContextRepository with real DB
+- [ ] Add frontend component tests
+- [ ] End-to-end test: webhook → email → chat → booking
 
-**Deliverable:** Staff sees customer activity in ShopMonkey
+### Configuration
+- [ ] Add TypeScript path aliases (`@/` imports)
+- [ ] Set up ESLint + Prettier
+- [ ] Add pre-commit hooks (husky)
 
----
+### Performance
+- [ ] Add Redis caching for ShopMonkey service catalog
+- [ ] Implement conversation caching
+- [ ] Add rate limiting to chat API
 
-## Open Questions for Next Conversation
-
-**Critical decisions needed:**
-1. Which AI provider? (Claude API, OpenAI, other?)
-2. What's the Tint World service catalog? (pricing, services)
-3. What are Store094's business hours?
-4. Does ShopMonkey support appointment creation via API?
-5. What's the desired chat UX flow?
-
-**Technical decisions:**
-6. WebSockets or REST for chat communication?
-7. How to handle AI errors (API down, bad response)?
-8. What's the fallback if appointment booking fails?
-9. When to escalate to human?
+### Monitoring
+- [ ] Add logging (winston or pino)
+- [ ] Track AI provider usage/costs
+- [ ] Set up error tracking (Sentry?)
+- [ ] Add health check endpoints
 
 ---
 
 ## Repository/Code Work Still Needed
 
-**After chat is built:**
+### Chat Package
+**Repositories:**
+- [ ] ServiceCatalogRepository (fetch from ShopMonkey, cache in Redis)
+- [ ] LocationRepository (business hours, location details)
+- [ ] ChatMessageRepository (save/load conversation history)
+- [ ] AppointmentRepository (create, update appointments)
 
-1. **Create ServiceCatalogRepository** (~100 lines)
-   - Query services by location
-   - Filter by active status
-   - Handle location-specific vs tenant-wide pricing
+**Services:**
+- [ ] AppointmentService (booking logic)
+- [ ] NotificationService (confirmations)
 
-2. **Create LocationRepository** (~80 lines)
-   - Query location details
-   - Get business hours
-   - Check if location is open
+**API Endpoints:**
+- [ ] POST /api/chat/:leadId (in progress)
+- [ ] GET /api/chat/:leadId/history
+- [ ] GET /api/chat/:leadId/context
+- [ ] POST /api/chat/:leadId/appointment
+- [ ] GET /api/health
 
-3. **Update LeadRepository** (~50 lines)
-   - All methods scope by tenant+location
-   - Add method: `findByLocationAndStatus()`
-
-4. **Write Tests**
-   - ServiceCatalogRepository tests
-   - LocationRepository tests
-   - Update existing tests for location scoping
-
-**Estimated time:** 3-4 hours (can be done alongside chat development)
-
----
-
-## What NOT To Do Yet
-
-❌ **Don't build chat without:**
-- Knowing which AI provider
-- Having service catalog data
-- Understanding ShopMonkey API capabilities
-
-❌ **Don't deploy to production without:**
-- Static domain (not ngrok)
-- Working chat interface
-- End-to-end testing
-
-❌ **Don't turn off demo mode until:**
-- Chat is fully working
-- Twilio A2P approved (for SMS)
-- Production deployment stable
+### Orchestrator Package
+**Updates needed:**
+- [ ] Update email template with chat link
+- [ ] Add chat engagement tracking
+- [ ] Update touch point logic (stop if customer engages via chat)
 
 ---
 
-## Estimated Timeline
+## Deployment Preparation
 
-**If prerequisites answered quickly:**
-- Week 1: Basic chat working
-- Week 2: Service info + booking
-- Week 3: ShopMonkey sync + polish
-- Week 4: Production deployment
+### Infrastructure
+- [ ] Static domain for webhooks (replace ngrok)
+- [ ] Deploy orchestrator (VPS or container)
+- [ ] Deploy chat service (separate container)
+- [ ] Deploy frontend (Vercel/Cloudflare Pages)
+- [ ] Configure CDN for frontend assets
 
-**Total: 3-4 weeks** (with clear answers to prerequisite questions)
+### Security
+- [ ] API authentication (JWT tokens?)
+- [ ] Rate limiting on endpoints
+- [ ] CORS configuration
+- [ ] Environment variable management (Vault?)
+
+### Monitoring
+- [ ] Uptime monitoring (UptimeRobot)
+- [ ] Error tracking (Sentry)
+- [ ] Log aggregation (CloudWatch, Datadog)
+- [ ] Cost tracking dashboard
 
 ---
 
-## Starting Next Conversation
+## Feature Roadmap
 
-**Recommended opening:**
-```
-"I need to build the AI chat interface for customer engagement. 
-The database schema is ready (location_hours, service_catalog, 
-chat_messages, appointments tables exist).
+### Phase 1: MVP (Current - Week 1-2)
+- [x] Orchestrator working
+- [x] Multi-provider AI
+- [ ] Chat API endpoints
+- [ ] Basic chat UI
+- [ ] Manual appointment booking (human takes over)
 
-Before I start building, I need to make some decisions:
-1. Which AI provider should I use?
-2. Can you provide the Tint World service catalog?
-3. What are Store094's business hours?
-4. Have we researched ShopMonkey's appointment API?
+### Phase 2: Automation (Week 3-4)
+- [ ] AI-powered appointment booking
+- [ ] Calendar integration
+- [ ] Automated confirmations
+- [ ] Follow-up automation
 
-Let's answer these questions and then plan the chat implementation."
-```
+### Phase 3: Scale (Month 2)
+- [ ] Multi-location support (200+ franchises)
+- [ ] Location-specific pricing
+- [ ] A/B testing AI providers
+- [ ] Analytics dashboard
+
+### Phase 4: Advanced (Month 3+)
+- [ ] Voice chat support
+- [ ] Multiple languages
+- [ ] Advanced AI features (image analysis, etc.)
+- [ ] Mobile app
+
+---
+
+## Questions to Answer
+
+### Technical Decisions
+1. **Chat communication:** REST polling (current plan) or WebSockets?
+2. **Authentication:** How to secure chat endpoints? JWT? Magic links?
+3. **ShopMonkey appointment API:** Does it exist? Need to research.
+4. **A/B testing:** When to enable automated provider testing?
+
+### Business Decisions
+5. **Demo mode:** When to turn off and go live?
+6. **Twilio production:** Get A2P approval for SMS?
+7. **Domain setup:** What domain for chat? `chat.tintworld.com`?
+8. **Pricing model:** How to bill customers? Per lead? Per location?
+
+---
+
+## Open Issues
+
+### High Priority
+- Chat API endpoints not built (next immediate task)
+- Frontend not started
+- No end-to-end testing yet
+
+### Medium Priority
+- Demo mode still ON (safe but limiting)
+- Using ngrok (need static domain for production)
+- Twilio sandbox mode (SMS may not deliver)
+- No logging/monitoring yet
+
+### Low Priority
+- Test coverage could be higher
+- Need ESLint/Prettier
+- Documentation could be expanded
 
 ---
 
 ## Success Criteria
 
-**Chat is successful when:**
-- ✅ Customer receives chat link via email (<1 second)
-- ✅ Customer can ask questions about services
-- ✅ AI provides accurate pricing from service catalog
-- ✅ Customer can book appointment
-- ✅ Appointment syncs to ShopMonkey
-- ✅ Staff sees customer activity in ShopMonkey
-- ✅ Lead status updates appropriately
-- ✅ Touch point sequence stops when customer engages
+**Chat package is DONE when:**
+- [x] Multi-provider AI working (both Claude and OpenAI tested)
+- [x] Can toggle providers via env var
+- [x] Tests passing (10/10 currently)
+- [x] Database integration working
+- [ ] REST API endpoints working (next)
+- [ ] Frontend UI built and connected
+- [ ] Customer can chat and get responses
+- [ ] Appointment booking works (manual or automated)
+- [ ] End-to-end flow tested
+
+**System is PRODUCTION READY when:**
+- [ ] All tests passing
+- [ ] Coverage >80%
+- [ ] Static domain configured
+- [ ] Demo mode OFF
+- [ ] Monitoring in place
+- [ ] Documentation complete
+- [ ] Security review done
+- [ ] Load testing completed
 
 ---
 
-## Files to Reference in Next Conversation
+## Starting Next Conversation
 
-**Architecture docs:**
-- `docs/HANDOFF.md` - Complete system overview
-- `docs/architecture/PHASED_IMPLEMENTATION.md` - Architecture approach
-- `docs/MVP_LOGIC.md` - Business rules
+**Quick start commands:**
+```bash
+# Verify chat is working
+cd packages/chat
+npm test          # Should see 10 passing
+npm run demo      # Should get AI response
 
-**Database:**
-- Migration 8: `location_hours` table
-- Migration 9: `service_catalog` table
-- Migration 10: `chat_messages` table
-- Migration 11: `appointments` table
+# Check what's running
+docker compose ps  # Database should be up
+```
 
-**Code:**
-- `src/infrastructure/webhooks/ShopMonkeyWebhookHandler.ts` - How leads are imported
-- `src/infrastructure/crm/ShopMonkeyAdapter.ts` - ShopMonkey API integration
-- `src/domain/TouchPointSchedule.ts` - Touch point logic
+**Recommended opening:**
+```
+"I'm continuing work on Lead Orchestrator. Last session we built 
+the multi-provider AI chat system (Claude + OpenAI) with TDD. 
+It's working and tested. 
+
+Next priority: Build REST API endpoints for the chat service so 
+frontend can call it.
+
+Let's start with POST /api/chat/:leadId endpoint."
+```
+
+**Or if you want to see current state:**
+```
+"Show me the current status of the chat package and what works so far."
+```
 
 ---
 
-**This document provides clear handoff for next conversation. All prerequisites identified, implementation plan outlined, open questions documented.**
+## Files to Reference
+
+**What we built:**
+- `packages/chat/README.md` - Complete usage guide
+- `packages/chat/src/ai/` - All AI provider code
+- `packages/chat/src/demo.ts` - Working demo script
+
+**What's next:**
+- `packages/chat/src/api/routes.ts` - (to be created)
+- `packages/chat/src/server.ts` - (to be created)
+- `packages/frontend/` - (to be built)
+
+---
+
+## Detailed Implementation Plan
+
+### Week 1: Chat API + Frontend Foundation
+**Days 1-2: REST API**
+- Set up Fastify server
+- Create route handlers
+- Database integration
+- Error handling
+- Health checks
+
+**Days 3-4: Frontend Setup**
+- Initialize React app
+- Set up routing
+- Basic layout
+- API client setup
+
+**Day 5: Integration Testing**
+- Test API with Postman
+- Test frontend → API connection
+- Fix bugs
+
+### Week 2: Chat UI + Polish
+**Days 1-3: Chat Components**
+- Message display
+- Input handling
+- Conversation history
+- Typing indicators
+- Error states
+
+**Days 4-5: Orchestrator Integration**
+- Update email templates
+- Add chat links
+- Test full flow
+- Bug fixes
+
+### Week 3: Booking + Automation
+**Days 1-2: Appointment Logic**
+- Availability checking
+- Booking creation
+- Confirmation flow
+
+**Days 3-5: Polish + Deploy**
+- Testing
+- Documentation
+- Deployment prep
+- Go live
+
+---
+
+## Cost Analysis
+
+### Development Time (Estimated)
+- Chat API: 2-3 hours ✅ NEXT
+- Frontend UI: 1 day
+- Integration: 1 day
+- Booking flow: 3-4 hours
+- Testing/polish: 1 day
+**Total: ~1 week**
+
+### Operating Costs (Monthly)
+- Database: $25-50
+- Redis: $10-20
+- Hosting (3 services): $60-100
+- SendGrid: $15-50
+- Twilio: $50-200
+- AI (Claude/OpenAI): $50-500 (scales with usage)
+**Total: $210-920/month**
+
+### Revenue Potential
+- 100 leads/month: $4,000-8,000 revenue potential
+- Break-even: ~25-30 leads/month
+- Scale economics improve significantly
+
+---
+
+**Status: Ready for REST API development** 🚀
