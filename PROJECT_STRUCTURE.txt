@@ -1,0 +1,150 @@
+# Lead Orchestrator - Project Structure
+
+**Generated:** 2025-11-27T08:59:39.356Z
+**Status:** Chat Core Complete, Needs: Catalog Integration, Frontend, Auth
+
+This file is auto-generated. Run `node generate-structure.js` to update.
+
+---
+
+## Package Overview
+
+- **orchestrator/** - Main lead management service (Shopmonkey, SMS, webhooks)
+- **chat/** - AI chat API with Claude + OpenAI (REST + SSE streaming)
+- **frontend/** - React chat UI (not started yet)
+- **shared/** - Shared TypeScript types
+
+---
+
+## Directory Tree
+
+```
+LeadManager/
+
+├── .env
+├── .gitignore
+├── docker-compose.yml
+├── docs # Documentation and guides
+│   ├── HANDOFF.md
+│   ├── MVP_LOGIC.md
+│   ├── START_HERE.md
+│   ├── architecture # System architecture documentation
+│   │   ├── PHASED_IMPLEMENTATION.md
+│   │   └── SYSTEM_OVERVIEW.md
+│   ├── archive # Historical documentation snapshots
+│   │   └── current-11-25.md
+│   ├── next_steps.md
+│   └── reference
+├── generate-structure.js
+├── knexfile.js
+├── package.json
+├── packages
+│   ├── chat # AI chat API - Claude/OpenAI integration (port 3001)
+│   │   ├── .env
+│   │   ├── README.md
+│   │   ├── jest.config.js
+│   │   ├── package.json
+│   │   ├── src
+│   │   │   ├── __tests__
+│   │   │   ├── ai
+│   │   │   ├── api
+│   │   │   ├── config
+│   │   │   ├── demo.ts
+│   │   │   ├── index.ts
+│   │   │   ├── infrastructure
+│   │   │   ├── repositories
+│   │   │   ├── server.ts
+│   │   │   └── services
+│   │   └── tsconfig.json
+│   ├── frontend # React chat UI - customer interface (port 5173)
+│   │   ├── index.html
+│   │   ├── package.json
+│   │   ├── src
+│   │   │   ├── App.tsx
+│   │   │   ├── components
+│   │   │   └── main.tsx
+│   │   ├── tsconfig.json
+│   │   ├── tsconfig.node.json
+│   │   └── vite.config.ts
+│   ├── orchestrator # Lead management service - webhooks, SMS, polling (port 3000)
+│   │   ├── .env
+│   │   ├── knexfile.js
+│   │   ├── package.json
+│   │   ├── src
+│   │   │   ├── __tests__
+│   │   │   ├── domain
+│   │   │   ├── index.ts
+│   │   │   ├── infrastructure
+│   │   │   └── test-shopmonkey.ts
+│   │   └── tsconfig.json
+│   └── shared # Shared TypeScript types and validation
+│       ├── package.json
+│       ├── src
+│       │   ├── index.ts
+│       │   ├── types
+│       │   └── validation
+│       └── tsconfig.json
+├── shopmonkey-response.json
+├── tsconfig.json
+├── vitest.config.ts
+└── workspace-migration.sh
+```
+
+
+---
+
+## Key Files
+
+### Configuration
+- `package.json` - Workspace root configuration
+- `docker-compose.yml` - PostgreSQL database
+- `knexfile.js` - Database migrations config (orchestrator)
+- `.env` files - Environment variables (per package)
+
+### Documentation
+- `docs/START_HERE.md` - Navigation guide for LLMs
+- `docs/HANDOFF.md` - Current status and known issues
+- `docs/architecture/SYSTEM_OVERVIEW.md` - Architecture map
+- `docs/architecture/PHASED_IMPLEMENTATION.md` - Implementation history
+
+### Package Entry Points
+- `packages/orchestrator/src/index.ts` - Orchestrator main
+- `packages/chat/src/server.ts` - Chat API server
+- `packages/chat/src/api/routes.ts` - Chat API routes
+- `packages/frontend/src/App.tsx` - Frontend main (not built)
+
+### Tests
+- `packages/orchestrator/src/__tests__/` - Orchestrator tests
+- `packages/chat/src/__tests__/` - Chat API tests (33 passing)
+
+---
+
+## Important Subdirectories
+
+### packages/orchestrator/src/
+- `infrastructure/` - Database, CRM, webhooks, messaging, jobs
+  - `persistence/` - Database and repositories
+  - `crm/` - Shopmonkey adapter
+  - `webhooks/` - Webhook handlers
+  - `messaging/` - Twilio/SendGrid services
+  - `jobs/` - Polling and touch point processors
+- `services/` - Business logic (LeadOrchestrationService)
+- `domain/` - Domain models (if any)
+
+### packages/chat/src/
+- `ai/` - AI provider abstraction
+  - `providers/` - Claude, OpenAI implementations
+- `api/` - HTTP controllers and routes
+  - `controllers/` - ChatController
+- `repositories/` - Database access (ChatMessageRepository)
+- `services/` - Business logic (ChatService)
+- `infrastructure/` - Database connection
+
+### packages/frontend/src/ (planned)
+- `components/` - React components
+- `hooks/` - Custom React hooks
+- `api/` - API client for chat
+
+---
+
+**Last Updated:** 11/27/2025

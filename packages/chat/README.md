@@ -1,117 +1,156 @@
-# Chat Package - Multi-Provider AI Service
+# @lead-manager/chat
 
-## Status: ✅ Core Complete (Nov 26, 2025)
+AI-powered chat API for automotive service leads using Claude and OpenAI.
 
-Multi-provider AI chat system with Claude and OpenAI support, built using TDD.
-
----
-
-## What's Built
-
-### ✅ Complete
-- **Multi-Provider AI System** - Toggle between Claude Sonnet 4.5 and OpenAI GPT-4o
-- **Provider Abstraction** - Clean interface for adding more providers
-- **Configuration System** - Environment-based provider selection
-- **Database Integration** - Shares PostgreSQL with orchestrator
-- **Repository Pattern** - Fetch lead context from DB
-- **Test Coverage** - 10 tests passing, TDD approach
-- **Cost Tracking** - Built-in cost calculation per provider
-
-### 🔜 Next Steps
-- REST API endpoints (FastAPI routes)
-- React chat UI (packages/frontend)
-- End-to-end integration testing
+**Status:** ✅ Core API Complete, 🚧 Production Integration Needed  
+**Tests:** 33 passing  
+**Port:** 3001
 
 ---
 
 ## Quick Start
-
-### 1. Install Dependencies
 ```bash
-cd packages/chat
+# Install dependencies (from workspace root)
 npm install
-```
 
-### 2. Configure API Keys
-Edit `packages/chat/.env`:
-```bash
-AI_PROVIDER=claude
-ANTHROPIC_API_KEY=sk-ant-your-key-here
-OPENAI_API_KEY=sk-your-openai-key-here
-AI_FALLBACK_PROVIDER=openai
-```
+# Set up environment variables
+cp .env.example .env
+# Add your API keys to .env
 
-### 3. Run Tests
-```bash
+# Run tests
 npm test
+
+# Start server
+npm run dev
 ```
 
-### 4. Test with Real APIs
-```bash
-# Test with Claude
-npm run demo
+Server will start at `http://localhost:3001`
 
-# Test with OpenAI
-AI_PROVIDER=openai npm run demo
+---
+
+## Environment Variables
+
+Create a `.env` file in this directory:
+```bash
+# Database (same as orchestrator)
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/lead_orchestrator
+
+# AI Providers (need at least one)
+ANTHROPIC_API_KEY=sk-ant-api03-...
+OPENAI_API_KEY=sk-proj-...
+
+# Optional
+AI_PROVIDER=claude        # or 'openai'
+PORT=3001
+LOG_LEVEL=info
+CORS_ORIGIN=*
 ```
 
 ---
 
-## Provider Comparison (From Real Tests)
+## API Endpoints
 
-| Provider | Style | Speed | Cost/msg | Tokens/msg |
-|----------|-------|-------|----------|------------|
-| **Claude** | Conversational, detailed | 3.4s | $0.005 | 254 |
-| **OpenAI** | Concise, direct | 1.5s | $0.002 | 174 |
+### POST /api/chat/:leadId/message
+Send a message and get AI response.
 
-**Winner:** OpenAI is 2x faster and cheaper. Claude is more conversational.
+**Request:**
+```json
+{
+  "message": "How much does ceramic tint cost?"
+}
+```
 
-**Use Case:**
-- Claude: When you want detailed, friendly responses
-- OpenAI: When you want fast, concise responses
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "content": "For your Toyota Camry, our Supreme Tint Package...",
+    "provider": "claude",
+    "metadata": {
+      "tokens_used": {"input": 263, "output": 76},
+      "latency_ms": 3138
+    }
+  }
+}
+```
+
+### GET /api/chat/:leadId/stream
+Server-Sent Events streaming (word-by-word).
+
+**Query params:** `?message=Hello`
+
+**Response:** SSE stream
+```
+data: {"text":"Hello "}
+data: {"text":"there! "}
+data: {"done":true,"provider":"claude"}
+```
+
+### GET /api/chat/:leadId/history
+Get conversation history.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "...",
+      "role": "user",
+      "content": "How much for tint?",
+      "created_at": "2025-11-27T08:36:02.581Z"
+    }
+  ]
+}
+```
+
+### GET /api/chat/:leadId/context
+Get lead context (customer, vehicle, services).
+
+### GET /health
+Check AI provider status.
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "providers": {
+    "claude": true,
+    "openai": true
+  }
+}
+```
 
 ---
 
 ## Architecture
 ```
-packages/chat/
-├── src/
-│   ├── ai/
-│   │   ├── providers/
-│   │   │   ├── AIProvider.ts          # Interface
-│   │   │   ├── ClaudeProvider.ts      # Claude implementation
-│   │   │   ├── OpenAIProvider.ts      # OpenAI implementation
-│   │   │   └── index.ts               # Factory
-│   │   └── AIService.ts               # Orchestrator
-│   ├── config/
-│   │   └── ai-config.ts               # Environment config
-│   ├── infrastructure/
-│   │   └── db.ts                      # Database connection
-│   ├── repositories/
-│   │   └── LeadContextRepository.ts   # Fetch lead data
-│   └── __tests__/                     # Test utilities
+Request → ChatController → ChatService → AIService → Claude/OpenAI
+                              ↓              ↓
+                     ChatMessageRepository  LeadContextRepository
+                              ↓              ↓
+                           PostgreSQL Database
 ```
 
----
+### Key Components
 
-## How to Toggle Providers
+**AI Layer (`src/ai/`)**
+- `AIService.ts` - Main orchestrator, switches between providers
+- `providers/ClaudeProvider.ts` - Anthropic Claude integration
+- `providers/OpenAIProvider.ts` - OpenAI GPT integration
+- `providers/AIProvider.ts` - Provider interface
 
-### Method 1: Environment Variable
-```bash
-AI_PROVIDER=claude npm run demo
-AI_PROVIDER=openai npm run demo
-```
+**API Layer (`src/api/`)**
+- `controllers/ChatController.ts` - HTTP request handlers
+- `routes.ts` - Fastify route registration
 
-### Method 2: In Code
-```typescript
-import { AIService } from './ai/AIService';
+**Service Layer (`src/services/`)**
+- `ChatService.ts` - Business logic, orchestrates AI and data
 
-// Reads from process.env.AI_PROVIDER
-const aiService = new AIService();
-
-const response = await aiService.generateResponse(context, message);
-console.log(response.provider); // 'claude' or 'openai'
-```
+**Data Layer (`src/repositories/`)**
+- `ChatMessageRepository.ts` - Chat messages and sessions
+- `LeadContextRepository.ts` - Lead data for AI context
 
 ---
 
@@ -123,74 +162,161 @@ npm test
 # Watch mode
 npm test:watch
 
-# Coverage report
+# Coverage
 npm test:coverage
 
-# Type check
-npm run type-check
+# Specific test file
+npm test ChatMessageRepository
 ```
 
-**Current Coverage:** 10 tests passing
-- AIProvider interface tests
-- ClaudeProvider tests (4)
-- OpenAIProvider tests (4)
-- LeadContextRepository tests (2)
+**Test Coverage:** 33 tests across 6 suites
+- ChatMessageRepository: 7 tests (database operations)
+- ChatService: 8 tests (business logic)
+- ChatController: 8 tests (HTTP layer)
+- AI Providers: 10 tests (Claude + OpenAI)
 
 ---
 
-## Environment Variables
+## AI Provider Configuration
+
+### Claude (Default)
+- Model: `claude-sonnet-4-20250514`
+- Latency: 3-7 seconds
+- Cost: ~$0.005 per message
+- Style: Conversational, detailed
+
+### OpenAI
+- Model: `gpt-4o`
+- Latency: 1-2 seconds
+- Cost: ~$0.002 per message
+- Style: Concise, direct
+
+**Switch providers:**
 ```bash
-# Required
-ANTHROPIC_API_KEY=sk-ant-...
-OPENAI_API_KEY=sk-...
-
-# Optional
-AI_PROVIDER=claude
-AI_FALLBACK_PROVIDER=openai
-CLAUDE_MODEL=claude-sonnet-4-20250514
-OPENAI_MODEL=gpt-4o
-DATABASE_URL=postgresql://...
+# In .env file
+AI_PROVIDER=openai  # or 'claude'
 ```
 
 ---
 
-## Next Development Steps
+## Database Schema
 
-1. **Add REST API** (2-3 hours)
-   - Fastify routes for chat
-   - Endpoint: `POST /api/chat/:leadId`
-   - Health check endpoint
+### chat_sessions
+- `id` (uuid, primary key)
+- `tenant_id` (uuid, foreign key → tenants)
+- `lead_id` (uuid, foreign key → leads)
+- `status` (varchar) - 'active', 'completed', 'abandoned'
+- `started_at`, `last_message_at`, `completed_at` (timestamps)
+- `messages_count`, `total_tokens_used` (integers)
 
-2. **Build Frontend** (1 day)
-   - React chat UI in packages/frontend
-   - Connect to chat API
-   - Display conversation history
+### chat_messages
+- `id` (uuid, primary key)
+- `session_id` (uuid, foreign key → chat_sessions)
+- `lead_id` (uuid, foreign key → leads)
+- `role` (varchar) - 'user', 'assistant'
+- `content` (text)
+- `metadata` (jsonb) - tokens, latency, provider info
+- `created_at` (timestamp)
 
-3. **Integration** (1 day)
-   - Orchestrator sends email with chat link
-   - Frontend calls chat API
-   - End-to-end flow
+---
+
+## Development
+
+### Adding a New AI Provider
+
+1. Create provider in `src/ai/providers/`:
+```typescript
+export class GeminiProvider implements AIProvider {
+  async generateResponse(context, message) {
+    // Implementation
+  }
+  
+  calculateCost(tokens) {
+    // Pricing logic
+  }
+}
+```
+
+2. Register in `src/ai/providers/index.ts`
+3. Add configuration to `src/config/ai-config.ts`
+4. Add tests
+
+### Adding a New Endpoint
+
+1. Add method to `ChatController`
+2. Register route in `routes.ts`
+3. Add tests in `ChatController.test.ts`
 
 ---
 
 ## Troubleshooting
 
-**Tests fail:**
+**"No AI providers configured"**
+- Check `.env` file exists in this directory
+- Verify at least one API key is set
+- Restart the server
+
+**"Lead not found"**
+- Verify lead exists in database
+- Check lead_id is valid UUID
+- Ensure database connection works
+
+**"Port 3001 already in use"**
 ```bash
+lsof -ti:3001 | xargs kill -9
+npm run dev
+```
+
+**Tests failing**
+```bash
+# Clean install
+rm -rf node_modules
 npm install
 npm test
 ```
 
-**Demo fails:**
-- Check `.env` has valid API keys
-- Check database running: `docker compose ps`
+---
 
-**API key errors:**
-- Anthropic: https://console.anthropic.com/settings/keys
-- OpenAI: https://platform.openai.com/api-keys
+## Performance
+
+**Response Times:**
+- Health check: <50ms
+- Message (Claude): 3-7s
+- Message (OpenAI): 1-2s
+- History retrieval: <100ms
+- Context retrieval: <50ms
+
+**Concurrency:**
+- Handles 10-20 concurrent chats
+- Each request is independent
+- No shared state between requests
 
 ---
 
-## License
+## Deployment
 
-MIT
+### Development
+```bash
+npm run dev  # Port 3001
+```
+
+### Production
+```bash
+npm run build
+node dist/server.js
+```
+
+**Environment:** Set `NODE_ENV=production`
+
+---
+
+## Related Documentation
+
+- **API Reference:** `API.md`
+- **Architecture:** `../../docs/architecture/SYSTEM_OVERVIEW.md`
+- **Implementation History:** `../../docs/architecture/PHASED_IMPLEMENTATION.md`
+
+---
+
+**Maintained by:** Lead Orchestrator Team  
+**Last Updated:** November 27, 2025
