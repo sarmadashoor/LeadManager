@@ -6,9 +6,16 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "test": "jest",
+    "test:services": "tsx src/test-shopmonkey-services.ts",
     "migrate": "knex migrate:latest",
     "migrate:latest": "knex migrate:latest",
-    "migrate:rollback": "knex migrate:rollback"
+    "migrate:rollback": "knex migrate:rollback",
+    "test:sync": "tsx src/test-service-sync.ts",
+    "debug:sync": "tsx src/debug-service-sync.ts",
+    "force:sync": "tsx src/force-sync.ts",
+    "analyze:services": "tsx src/analyze-services.ts",
+    "recategorize": "tsx src/recategorize-services.ts",
+    "show:other": "tsx src/show-other-services.ts"
   },
   "dependencies": {
     "@lead-manager/shared": "*",

@@ -627,3 +627,33 @@ Customer → Orchestrator (3000) ────→ Serves Frontend HTML
 - Full System: 🚧 ~1 week from production
 
 **All major technical risks resolved. Clear path to production.** 🚀
+
+## 🎉 UPDATE: Service Catalog Integration Complete (Nov 27, 2025)
+
+### What Was Completed
+- ✅ ShopMonkey service catalog API integration (`/canned_service` endpoint)
+- ✅ ServiceCatalogRepository with upsert logic
+- ✅ ServiceSyncService - fetches all services in one API call, groups by location
+- ✅ ServiceCatalogSyncJob - daily automated sync with error tracking
+- ✅ 14 service categories with 97% auto-classification accuracy
+- ✅ LeadContextRepository updated - Chat API now uses real pricing
+- ✅ 100 services synced from ShopMonkey (16 ceramic, 17 bedliner, 15 audio, etc.)
+
+### Architecture
+- Fetch-once strategy (1 API call vs 200 per location)
+- Per-location services stored with location_id
+- Upsert pattern prevents duplicates
+- Stale service cleanup (48hr threshold)
+
+### Current Status
+✅ Orchestrator: Production Ready
+✅ Chat API: Production Ready (uses real catalog)
+✅ Service Catalog: Production Ready
+🚧 Frontend: Not Started
+🚧 System Prompt: Needs update to mention full service range
+
+### Next Immediate Priority
+1. Update AI system prompt to reflect full service offering (not just window tinting)
+2. Build React frontend
+3. Add authentication
+

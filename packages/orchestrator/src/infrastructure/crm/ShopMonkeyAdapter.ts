@@ -41,6 +41,41 @@ export interface ShopMonkeyVehicle {
   model: string | null;
 }
 
+export interface ShopMonkeyCannedService {
+  id: string;
+  name: string;
+  locationId: string;
+  companyId: string;
+  totalCents: number;
+  calculatedLaborCents: number;
+  calculatedPartsCents: number;
+  calculatedFeeCents: number;
+  calculatedSubcontractsCents: number;
+  calculatedTiresCents: number;
+  discountCents: number;
+  taxCents: number;
+  note: string | null;
+  pricing: string; // 'LineItem', etc.
+  deleted: boolean;
+  createdDate: string;
+  updatedDate: string;
+  bookable: boolean;
+  fees?: Array<{
+    id: string;
+    name: string;
+    amountCents: number;
+  }>;
+  labors?: Array<{
+    id: string;
+    name: string;
+    hours?: number;
+    rateCents?: number;
+  }>;
+  parts?: Array<any>;
+  subcontracts?: Array<any>;
+  tires?: Array<any>;
+}
+
 // Workflow Status IDs from Tint World ShopMonkey
 const WORKFLOW_STATUS = {
   WEBSITE_LEADS: '619813fb2c9c3e8ce527be48',
@@ -159,6 +194,23 @@ export class ShopMonkeyAdapter {
       .join(' ')
       .toLowerCase();
     return searchText.includes('tint') || searchText.includes('window');
+  }
+
+  /**
+   * Fetch all canned services from ShopMonkey
+   * Returns ALL services across all locations for the company
+   */
+  async fetchCannedServices(params: { limit?: number } = {}): Promise<ShopMonkeyCannedService[]> {
+    const queryParams = new URLSearchParams();
+    if (params.limit) queryParams.set('limit', params.limit.toString());
+    
+    const query = queryParams.toString();
+    const endpoint = `/canned_service${query ? `?${query}` : ''}`;
+    
+    const response = await this.request<{ data: ShopMonkeyCannedService[] }>(endpoint);
+    
+    // Filter out deleted services
+    return response.data.filter(service => !service.deleted);
   }
 
   /**

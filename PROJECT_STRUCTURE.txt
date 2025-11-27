@@ -1,7 +1,7 @@
 # Lead Orchestrator - Project Structure
 
-**Generated:** 2025-11-27T08:59:39.356Z
-**Status:** Chat Core Complete, Needs: Catalog Integration, Frontend, Auth
+**Generated:** 2025-11-27T20:33:39.827Z
+**Status:** Chat API Complete, Frontend Next
 
 This file is auto-generated. Run `node generate-structure.js` to update.
 
@@ -23,6 +23,8 @@ LeadManager/
 
 ├── .env
 ├── .gitignore
+├── PROJECT_STRUCTURE.txt
+├── README.md
 ├── docker-compose.yml
 ├── docs # Documentation and guides
 │   ├── HANDOFF.md
@@ -41,6 +43,7 @@ LeadManager/
 ├── packages
 │   ├── chat # AI chat API - Claude/OpenAI integration (port 3001)
 │   │   ├── .env
+│   │   ├── API.md
 │   │   ├── README.md
 │   │   ├── jest.config.js
 │   │   ├── package.json
@@ -68,13 +71,22 @@ LeadManager/
 │   │   └── vite.config.ts
 │   ├── orchestrator # Lead management service - webhooks, SMS, polling (port 3000)
 │   │   ├── .env
+│   │   ├── README.md
+│   │   ├── get-lead.ts
 │   │   ├── knexfile.js
 │   │   ├── package.json
 │   │   ├── src
 │   │   │   ├── __tests__
+│   │   │   ├── analyze-services.ts
+│   │   │   ├── debug-service-sync.ts
 │   │   │   ├── domain
+│   │   │   ├── force-sync.ts
 │   │   │   ├── index.ts
 │   │   │   ├── infrastructure
+│   │   │   ├── recategorize-services.ts
+│   │   │   ├── show-other-services.ts
+│   │   │   ├── test-service-sync.ts
+│   │   │   ├── test-shopmonkey-services.ts
 │   │   │   └── test-shopmonkey.ts
 │   │   └── tsconfig.json
 │   └── shared # Shared TypeScript types and validation
