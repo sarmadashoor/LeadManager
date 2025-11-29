@@ -1,6 +1,6 @@
 # Lead Orchestrator - Project Structure
 
-**Generated:** 2025-11-29T08:34:08.249Z
+**Generated:** 2025-11-29T09:00:39.744Z
 **Status:** Chat API Complete, Frontend Next
 
 This file is auto-generated. Run `node generate-structure.js` to update.
@@ -22,18 +22,17 @@ This file is auto-generated. Run `node generate-structure.js` to update.
 LeadManager/
 
 ├── .env
-├── .gitignore
 ├── PROJECT_STRUCTURE.md
 ├── README.md
 ├── docker-compose.yml
-├── docs # Documentation and guides
+├── docs
 │   ├── HANDOFF.md
 │   ├── MVP_LOGIC.md
 │   ├── START_HERE.md
-│   ├── architecture # System architecture documentation
+│   ├── architecture
 │   │   ├── PHASED_IMPLEMENTATION.md
 │   │   └── SYSTEM_OVERVIEW.md
-│   ├── archive # Historical documentation snapshots
+│   ├── archive
 │   │   └── current-11-25.md
 │   ├── next_steps.md
 │   └── reference
@@ -145,57 +144,11 @@ LeadManager/
 ---
 
 ## Key Files
-
-### Configuration
-- `package.json` - Workspace root configuration
-- `docker-compose.yml` - PostgreSQL database
-- `knexfile.js` - Database migrations config (orchestrator)
-- `.env` files - Environment variables (per package)
-
-### Documentation
-- `docs/START_HERE.md` - Navigation guide for LLMs
-- `docs/HANDOFF.md` - Current status and known issues
-- `docs/architecture/SYSTEM_OVERVIEW.md` - Architecture map
-- `docs/architecture/PHASED_IMPLEMENTATION.md` - Implementation history
-
-### Package Entry Points
-- `packages/orchestrator/src/index.ts` - Orchestrator main
-- `packages/chat/src/server.ts` - Chat API server
-- `packages/chat/src/api/routes.ts` - Chat API routes
-- `packages/frontend/src/App.tsx` - Frontend main
-
-### Tests
-- `packages/orchestrator/src/__tests__/` - Orchestrator tests
-- `packages/chat/src/__tests__/` - Chat API tests
+- package.json — workspace root
+- docker-compose.yml — PostgreSQL config
+- knexfile.js — migrations config
+- .env — environment per package
 
 ---
 
-## Important Subdirectories
-
-### packages/orchestrator/src/
-- `infrastructure/` - Database, CRM, webhooks, messaging, jobs
-  - `persistence/` - Database and repositories
-  - `crm/` - Shopmonkey adapter
-  - `webhooks/` - Webhook handlers
-  - `messaging/` - Twilio/SendGrid services
-  - `jobs/` - Polling and touch point processors
-- `services/` - Business logic (LeadOrchestrationService)
-- `domain/` - Domain models (if any)
-
-### packages/chat/src/
-- `ai/` - AI provider abstraction
-  - `providers/` - Claude, OpenAI implementations
-- `api/` - HTTP controllers and routes
-  - `controllers/` - ChatController
-- `repositories/` - Database access (ChatMessageRepository)
-- `services/` - Business logic (ChatService)
-- `infrastructure/` - Database connection
-
-### packages/frontend/src/
-- `components/` - React components
-- `hooks/` - Custom React hooks
-- `api/` - API client for chat
-
----
-
-**Last Updated:** 11/29/2025
+## Last Updated: 11/29/2025

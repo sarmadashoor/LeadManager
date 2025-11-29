@@ -1,40 +1,106 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
+import { apiPost } from "../api/client";
+import {
+  fetchLeadContext,
+  fetchChatHistory,
+  LeadContext,
+  ChatHistoryItem,
+} from "../api/chat";
 
 type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  createdAt?: string;
 };
 
-const API_BASE_URL = "http://localhost:3001";
-
 const ChatWindow: React.FC = () => {
-  const [leadId, setLeadId] = useState<string | null>(null);
+  const { leadId } = useParams<{ leadId: string }>();
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
 
-  // Read leadId from URL (?leadId=...)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get("leadId");
-    if (!id) {
-      setError(
-        "Missing leadId in URL. Example: http://localhost:5173/?leadId=TEST_LEAD_ID"
-      );
-    } else {
-      setLeadId(id);
-    }
-  }, []);
+  const [context, setContext] = useState<LeadContext | null>(null);
+  const [isLoadingContext, setIsLoadingContext] = useState(true);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
+  const messagesEndRef = React.useRef<HTMLDivElement | null>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Validate leadId immediately
+  useEffect(() => {
+    if (!leadId) {
+      setError("Invalid chat link: missing leadId in URL.");
+    }
+  }, [leadId]);
+
+  // Load lead context
+  useEffect(() => {
+    if (!leadId) return;
+
+    const loadContext = async () => {
+      try {
+        const data = await fetchLeadContext(leadId);
+        setContext(data);
+      } catch (err: any) {
+        console.error(err);
+        setError("Unable to load lead information.");
+      } finally {
+        setIsLoadingContext(false);
+      }
+    };
+
+    loadContext();
+  }, [leadId]);
+
+  // Load history (with BEST UX sorting)
+  useEffect(() => {
+    if (!leadId) return;
+
+    const loadHistory = async () => {
+      try {
+        const history = await fetchChatHistory(leadId);
+
+        const sorted = [...history].sort((a, b) => {
+          if (a.createdAt && b.createdAt) {
+            return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          }
+          return 0;
+        });
+
+        setMessages(sorted);
+      } catch (err: any) {
+        console.error(err);
+        setError("Unable to load chat history.");
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+
+    loadHistory();
+  }, [leadId]);
+
+  // Send message
   const handleSend = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault();
+
       if (!leadId) {
-        setError("leadId not set.");
+        setError("Lead ID missing.");
         return;
       }
+
       if (!input.trim()) return;
 
       const userMessage: ChatMessage = {
@@ -49,31 +115,11 @@ const ChatWindow: React.FC = () => {
       setError(null);
 
       try {
-        const response = await fetch(
-          `${API_BASE_URL}/api/chat/${encodeURIComponent(leadId)}/message`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ message: userMessage.content }),
-          }
+        const data = await apiPost(
+          `/api/chat/${encodeURIComponent(leadId)}/message`,
+          { message: userMessage.content }
         );
 
-        if (!response.ok) {
-          const text = await response.text();
-          throw new Error(
-            `Chat API error (${response.status}): ${
-              text || response.statusText
-            }`
-          );
-        }
-
-        const data = await response.json();
-
-        // Support both:
-        // - { success: true, data: { content: "..." } }
-        // - { response: "..." }
         const assistantContent: string =
           data?.data?.content ??
           (typeof data.response === "string"
@@ -97,7 +143,7 @@ const ChatWindow: React.FC = () => {
     [leadId, input]
   );
 
-  if (error && !leadId) {
+  if (!leadId) {
     return (
       <div style={{ padding: "1rem", fontFamily: "system-ui" }}>
         <h1>Lead Chat</h1>
@@ -106,22 +152,13 @@ const ChatWindow: React.FC = () => {
     );
   }
 
-  if (!leadId) {
-    return (
-      <div style={{ padding: "1rem", fontFamily: "system-ui" }}>
-        <h1>Lead Chat</h1>
-        <p>Loading lead information from URL...</p>
-      </div>
-    );
-  }
-
   return (
     <div
       style={{
         height: "100vh",
+        width: "100%",
         display: "flex",
         justifyContent: "center",
-        alignItems: "center",
         fontFamily: "system-ui",
         background: "#f5f5f5",
       }}
@@ -130,15 +167,14 @@ const ChatWindow: React.FC = () => {
         style={{
           width: "100%",
           maxWidth: "600px",
-          height: "80vh",
+          height: "100vh",
           background: "#ffffff",
-          borderRadius: "12px",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
         }}
       >
+        {/* HEADER */}
         <header
           style={{
             padding: "0.75rem 1rem",
@@ -154,15 +190,35 @@ const ChatWindow: React.FC = () => {
             <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>
               Tint Chat Assistant
             </div>
+
             <div style={{ fontSize: "0.75rem", opacity: 0.8 }}>
-              Lead: {leadId}
+              {/* Context */}
+              {isLoadingContext && "Loading lead…"}
+
+              {!isLoadingContext && context && (
+                <>
+                  {context.vehicle?.year} {context.vehicle?.make}{" "}
+                  {context.vehicle?.model}
+                  {context.services?.length
+                    ? ` • ${context.services.join(", ")}`
+                    : ""}
+                  <br />
+                  Lead: {leadId}
+                </>
+              )}
+
+              {!isLoadingContext && !context && (
+                <span style={{ color: "red" }}>Context unavailable</span>
+              )}
             </div>
           </div>
+
           <div style={{ fontSize: "0.75rem" }}>
             {isSending ? "Thinking…" : "Online"}
           </div>
         </header>
 
+        {/* MESSAGES */}
         <div
           style={{
             flex: 1,
@@ -171,7 +227,19 @@ const ChatWindow: React.FC = () => {
             background: "#f9fafb",
           }}
         >
-          {messages.length === 0 && (
+          {isLoadingHistory && (
+            <div
+              style={{
+                textAlign: "center",
+                color: "#6b7280",
+                fontSize: "0.85rem",
+              }}
+            >
+              Loading chat history…
+            </div>
+          )}
+
+          {!isLoadingHistory && messages.length === 0 && (
             <div
               style={{
                 fontSize: "0.85rem",
@@ -180,38 +248,39 @@ const ChatWindow: React.FC = () => {
                 marginTop: "1rem",
               }}
             >
-              Ask anything about pricing, tint options, or booking an
-              appointment.
+              Ask anything about pricing, tint options, or booking an appointment.
             </div>
           )}
 
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              style={{
-                display: "flex",
-                justifyContent:
-                  msg.role === "user" ? "flex-end" : "flex-start",
-                marginBottom: "0.5rem",
-              }}
-            >
+          {!isLoadingHistory &&
+            messages.map((msg) => (
               <div
+                key={msg.id}
                 style={{
-                  maxWidth: "80%",
-                  padding: "0.5rem 0.75rem",
-                  borderRadius: "999px",
-                  fontSize: "0.85rem",
-                  lineHeight: 1.4,
-                  background:
-                    msg.role === "user" ? "#111827" : "#e5e7eb",
-                  color: msg.role === "user" ? "#f9fafb" : "#111827",
+                  display: "flex",
+                  justifyContent:
+                    msg.role === "user" ? "flex-end" : "flex-start",
+                  marginBottom: "0.5rem",
                 }}
               >
-                {msg.content}
+                <div
+                  style={{
+                    maxWidth: "80%",
+                    padding: "0.5rem 0.75rem",
+                    borderRadius: "999px",
+                    fontSize: "0.85rem",
+                    lineHeight: 1.4,
+                    background:
+                      msg.role === "user" ? "#111827" : "#e5e7eb",
+                    color: msg.role === "user" ? "#f9fafb" : "#111827",
+                  }}
+                >
+                  {msg.content}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
 
+          {/* Error */}
           {error && (
             <div
               style={{
@@ -224,8 +293,11 @@ const ChatWindow: React.FC = () => {
               {error}
             </div>
           )}
+
+          <div ref={messagesEndRef} />
         </div>
 
+        {/* INPUT */}
         <form
           onSubmit={handleSend}
           style={{
