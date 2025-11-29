@@ -1,49 +1,76 @@
-# Chat API Reference
+# 📡 Chat API Reference (v1.0)
 
 **Base URL:** `http://localhost:3001`  
-**Version:** 1.0  
-**Status:** Core Complete, Needs Integration
+**Package:** `packages/chat`  
+**Status:** CORE COMPLETE — REST, SSE, Providers, Repositories all working  
+**Next Required:** Authentication + Frontend integration
 
 ---
 
-## Authentication
+## 1. 🔐 Authentication
 
-Currently: None (development only)  
-Production TODO: JWT tokens, rate limiting
+### Current:
+❌ No authentication (development only)
+
+### Production Requirements:
+
+- JWT or Magic Link tokens
+- Per-lead rate limiting
+- Per-tenant throttling (B2B SaaS)
+- CORS control
+- Session validation
 
 ---
 
-## Endpoints
+## 2. 🚀 Endpoints Overview
 
-### POST /api/chat/:leadId/message
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/chat/:leadId/message` | Send a message → get AI response |
+| GET | `/api/chat/:leadId/stream` | SSE streaming (token-by-token AI output) |
+| GET | `/api/chat/:leadId/history` | Retrieve conversation history |
+| GET | `/api/chat/:leadId/context` | Retrieve context used for prompt |
+| GET | `/health` | Provider + server health check |
 
-Send a message and receive AI response.
+---
 
-**URL Parameters:**
-- `leadId` (uuid, required) - Lead identifier from database
+## 3. POST /api/chat/:leadId/message
 
-**Request Body:**
+Send a user message → save it → get AI response → store response.
+
+```
+POST /api/chat/{leadId}/message
+```
+
+### URL Params
+
+- `leadId` — UUID (required)
+
+### Request Body
+
 ```json
 {
   "message": "How much does ceramic window tint cost?"
 }
 ```
 
-**Success Response (200):**
+### Validation
+
+- `"message"` must be a non-empty string
+- Lead must exist in DB (`leads` table)
+
+### Example Success Response (200)
+
 ```json
 {
   "success": true,
   "data": {
-    "content": "For your Toyota Camry, our Supreme Tint Package with ceramic tint for all windows is $450. Ceramic tint offers superior heat rejection and UV protection...",
+    "content": "For your Toyota Camry, ceramic tint typically starts at $450...",
     "provider": "claude",
     "metadata": {
       "provider": "claude",
       "model": "claude-sonnet-4-20250514",
-      "tokens_used": {
-        "input": 263,
-        "output": 76,
-        "total": 339
-      },
+      "tokens_used": { "input": 263, "output": 76, "total": 339 },
       "latency_ms": 3138,
       "finish_reason": "end_turn"
     }
@@ -51,9 +78,10 @@ Send a message and receive AI response.
 }
 ```
 
-**Error Responses:**
+### Common Errors
 
-400 Bad Request:
+#### 400 – Missing Message
+
 ```json
 {
   "success": false,
@@ -61,7 +89,8 @@ Send a message and receive AI response.
 }
 ```
 
-404 Not Found:
+#### 404 – Lead Not Found
+
 ```json
 {
   "success": false,
@@ -69,7 +98,8 @@ Send a message and receive AI response.
 }
 ```
 
-500 Internal Server Error:
+#### 500 – Server Error
+
 ```json
 {
   "success": false,
@@ -77,76 +107,78 @@ Send a message and receive AI response.
 }
 ```
 
-**Example:**
+### Example cURL
+
 ```bash
-curl -X POST http://localhost:3001/api/chat/8e379f21-3c10-4b69-97f9-bf4041c278df/message \
+curl -X POST http://localhost:3001/api/chat/LEAD_ID/message \
   -H "Content-Type: application/json" \
   -d '{"message": "What services do you offer?"}'
 ```
 
 ---
 
-### GET /api/chat/:leadId/stream
+## 4. GET /api/chat/:leadId/stream
 
-Server-Sent Events streaming endpoint for real-time responses.
+Real-time streaming (SSE)
 
-**URL Parameters:**
-- `leadId` (uuid, required) - Lead identifier
+```
+GET /api/chat/{leadId}/stream?message=Hello
+```
 
-**Query Parameters:**
-- `message` (string, required) - User message
+### Returns
 
-**Response:** text/event-stream
+- `Content-Type: text/event-stream`
 
-**Event Format:**
+### Stream Events
+
 ```
 data: {"text":"Hello "}
-
 data: {"text":"there! "}
-
 data: {"text":"How "}
-
 data: {"done":true,"provider":"claude"}
 ```
 
-**Example:**
+### Example (with curl)
+
 ```bash
-curl -N http://localhost:3001/api/chat/8e379f21-3c10-4b69-97f9-bf4041c278df/stream?message=Hello
+curl -N "http://localhost:3001/api/chat/LEAD_ID/stream?message=Hello"
 ```
 
-**JavaScript Client:**
+### Example JavaScript Client
+
 ```javascript
 const eventSource = new EventSource(
   `http://localhost:3001/api/chat/${leadId}/stream?message=${encodeURIComponent(message)}`
 );
 
-eventSource.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  
+eventSource.onmessage = e => {
+  const data = JSON.parse(e.data);
+
   if (data.done) {
-    console.log('Complete!', data.provider);
     eventSource.close();
   } else {
-    console.log('Token:', data.text);
+    console.log("Token:", data.text);
   }
 };
 
-eventSource.onerror = (error) => {
-  console.error('Stream error:', error);
+eventSource.onerror = (err) => {
+  console.error("Stream error:", err);
   eventSource.close();
 };
 ```
 
 ---
 
-### GET /api/chat/:leadId/history
+## 5. GET /api/chat/:leadId/history
 
-Retrieve conversation history for a lead.
+Retrieve all messages stored in `chat_messages` table.
 
-**URL Parameters:**
-- `leadId` (uuid, required) - Lead identifier
+```
+GET /api/chat/{leadId}/history
+```
 
-**Success Response (200):**
+### Example Response
+
 ```json
 {
   "success": true,
@@ -154,49 +186,46 @@ Retrieve conversation history for a lead.
     {
       "id": "9f1cd7f3-a67a-4a73-bc7f-a57fc4cc4fc3",
       "session_id": "59d8cfdb-273b-4579-b9f5-945a371f1893",
-      "lead_id": "8e379f21-3c10-4b69-97f9-bf4041c278df",
+      "lead_id": "LEAD_ID",
       "role": "user",
-      "content": "How much does ceramic window tint cost?",
+      "content": "How much does ceramic tint cost?",
       "metadata": null,
       "created_at": "2025-11-27T08:36:02.581Z"
     },
     {
       "id": "041fcbc9-39c5-4efb-95d3-3df0cc247240",
-      "session_id": "59d8cfdb-273b-4579-b9f5-945a371f1893",
-      "lead_id": "8e379f21-3c10-4b69-97f9-bf4041c278df",
       "role": "assistant",
-      "content": "For your Toyota Camry, our Supreme Tint Package...",
+      "content": "For your Toyota Camry...",
       "metadata": {
-        "model": "claude-sonnet-4-20250514",
         "provider": "claude",
+        "model": "claude-sonnet-4-20250514",
         "latency_ms": 3839,
-        "tokens_used": {
-          "input": 169,
-          "output": 76,
-          "total": 245
-        }
-      },
-      "created_at": "2025-11-27T08:36:06.425Z"
+        "tokens_used": { "input": 169, "output": 76, "total": 245 }
+      }
     }
   ]
 }
 ```
 
-**Example:**
-```bash
-curl http://localhost:3001/api/chat/8e379f21-3c10-4b69-97f9-bf4041c278df/history
-```
-
 ---
 
-### GET /api/chat/:leadId/context
+## 6. GET /api/chat/:leadId/context
 
-Get lead context used for AI prompts (customer, vehicle, services).
+Returns the lead context passed to AIService.
 
-**URL Parameters:**
-- `leadId` (uuid, required) - Lead identifier
+```
+GET /api/chat/{leadId}/context
+```
 
-**Success Response (200):**
+### Context Includes:
+
+- Customer info
+- Vehicle info
+- Services (placeholder, will be replaced with ShopMonkey catalog)
+- Conversation history (optional)
+
+### Example Success Response
+
 ```json
 {
   "success": true,
@@ -219,23 +248,18 @@ Get lead context used for AI prompts (customer, vehicle, services).
 }
 ```
 
-**Note:** Currently uses placeholder services. Production will fetch real ShopMonkey catalog.
-
-**404 Response:**
-```json
-{
-  "success": false,
-  "error": "Lead not found"
-}
-```
-
 ---
 
-### GET /health
+## 7. GET /health
 
-Check AI provider availability.
+Check provider + server health.
 
-**Success Response (200):**
+```
+GET /health
+```
+
+### Example Response
+
 ```json
 {
   "status": "ok",
@@ -247,25 +271,25 @@ Check AI provider availability.
 }
 ```
 
-**Example:**
-```bash
-curl http://localhost:3001/health
-```
+---
+
+## 8. Rate Limiting (Planned)
+
+### Development:
+❌ None
+
+### Production:
+- ✔ 100 req/min per lead
+- ✔ 1000 req/hour per tenant
+- ✔ Burst protection
+- ✔ Abuse detection
 
 ---
 
-## Rate Limiting
+## 9. Error Format (Standard)
 
-**Current:** None  
-**Production TODO:** 
-- 100 requests per minute per lead
-- 1000 requests per hour per tenant
+All errors follow this shape:
 
----
-
-## Error Handling
-
-All endpoints follow consistent error format:
 ```json
 {
   "success": false,
@@ -273,57 +297,57 @@ All endpoints follow consistent error format:
 }
 ```
 
-**Common HTTP Status Codes:**
-- `200` - Success
-- `400` - Bad request (missing/invalid parameters)
-- `404` - Resource not found (lead doesn't exist)
-- `500` - Internal server error
-
 ---
 
-## AI Provider Selection
+## 10. AI Providers
 
-Control which AI provider to use via environment variable:
+Selected via `.env`:
+
 ```bash
-# In packages/chat/.env
-AI_PROVIDER=claude  # or 'openai'
+AI_PROVIDER=claude     # "claude" | "openai"
+AI_FALLBACK_PROVIDER=openai
 ```
 
-**Provider Characteristics:**
+### Provider Comparison
 
-| Provider | Model | Latency | Cost/msg | Style |
-|----------|-------|---------|----------|-------|
-| Claude | Sonnet 4.5 | 3-7s | ~$0.005 | Conversational, detailed |
-| OpenAI | GPT-4o | 1-2s | ~$0.002 | Concise, direct |
-
----
-
-## WebSocket Support
-
-**Status:** Not implemented  
-**Alternative:** Use SSE streaming endpoint (`/stream`)
+| Provider | Model | Latency | Cost/msg | Style | Notes |
+|----------|-------|---------|----------|-------|-------|
+| Claude | Sonnet 4.5 | 3–7 sec | ~$0.005 | Conversational | Excellent text quality |
+| OpenAI | GPT-4o | 1–2 sec | ~$0.002 | Direct/concise | Fast, cheap |
 
 ---
 
-## Changelog
+## 11. WebSockets
 
-### v1.0 (Nov 27, 2025)
-- Initial release
-- POST /message endpoint
-- GET /stream (SSE)
-- GET /history
-- GET /context
-- GET /health
-- Multi-provider support (Claude + OpenAI)
+- ❌ Not implemented
+- ✔ SSE supported (`/stream`)
+- ✔ WebSockets may be added once frontend grows
 
 ---
 
-## Support
+## 12. Changelog
 
-- **Documentation:** `README.md`
-- **Examples:** See README Quick Start
-- **Issues:** Report via GitHub
+### v1.0 – Nov 27, 2025
+
+- `POST /message` endpoint
+- `GET /stream` SSE
+- `GET /history`
+- `GET /context`
+- `GET /health`
+- Multi-provider integration (Claude + OpenAI)
+- Repositories + Services layer complete
 
 ---
 
-**Last Updated:** November 27, 2025
+## 13. Support
+
+- **Docs:** `packages/chat/README.md`
+- **API:** This file
+- **Issues:** GitHub or project issue tracker
+
+---
+
+## 14. Last Updated
+
+**November 27, 2025**  
+**Maintainer:** Lead Orchestrator Core Team

@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const ignore = [
-  'node_modules', '.git', 'dist', 'build', '.next', 
+  'node_modules', '.git', 'dist', 'build', '.next',
   'coverage', '.turbo', '.DS_Store', 'package-lock.json'
 ];
 
@@ -24,41 +24,48 @@ const descriptions = {
 
 function tree(dir, prefix = '', level = 0, maxLevel = 3, output = []) {
   if (level > maxLevel) return output;
-  
+
   try {
     const items = fs.readdirSync(dir).filter(item => !ignore.includes(item));
-    
+
     items.forEach((item, index) => {
       const fullPath = path.join(dir, item);
       const isLast = index === items.length - 1;
       const connector = isLast ? '└── ' : '├── ';
       const relativePath = fullPath.replace(process.cwd() + '/', '');
-      
+
       let line = prefix + connector + item;
-      
+
       // Add description if available
       if (descriptions[relativePath]) {
         line += ` # ${descriptions[relativePath]}`;
       }
-      
+
       output.push(line);
-      
+
       try {
         const stat = fs.statSync(fullPath);
         if (stat.isDirectory()) {
           const newPrefix = prefix + (isLast ? '    ' : '│   ');
           tree(fullPath, newPrefix, level + 1, maxLevel, output);
         }
-      } catch (e) {}
+      } catch (e) {
+        // ignore FS errors on individual paths
+      }
     });
-  } catch (e) {}
-  
+  } catch (e) {
+    // ignore FS errors at root level
+  }
+
   return output;
 }
 
+const nowIso = new Date().toISOString();
+const nowPretty = new Date().toLocaleDateString();
+
 const header = `# Lead Orchestrator - Project Structure
 
-**Generated:** ${new Date().toISOString()}
+**Generated:** ${nowIso}
 **Status:** Chat API Complete, Frontend Next
 
 This file is auto-generated. Run \`node generate-structure.js\` to update.
@@ -69,7 +76,7 @@ This file is auto-generated. Run \`node generate-structure.js\` to update.
 
 - **orchestrator/** - Main lead management service (Shopmonkey, SMS, webhooks)
 - **chat/** - AI chat API with Claude + OpenAI (REST + SSE streaming)
-- **frontend/** - React chat UI (not started yet)
+- **frontend/** - React chat UI - customer interface (port 5173)
 - **shared/** - Shared TypeScript types
 
 ---
@@ -83,7 +90,7 @@ LeadManager/
 const output = [header];
 const treeLines = tree('.', '', 0, 3);
 output.push(...treeLines);
-output.push('```\n');
+output.push('```' + '\n');
 
 output.push(`
 ---
@@ -106,7 +113,7 @@ output.push(`
 - \`packages/orchestrator/src/index.ts\` - Orchestrator main
 - \`packages/chat/src/server.ts\` - Chat API server
 - \`packages/chat/src/api/routes.ts\` - Chat API routes
-- \`packages/frontend/src/App.tsx\` - Frontend main (not built)
+- \`packages/frontend/src/App.tsx\` - Frontend main
 
 ### Tests
 - \`packages/orchestrator/src/__tests__/\` - Orchestrator tests
@@ -135,16 +142,18 @@ output.push(`
 - \`services/\` - Business logic (ChatService)
 - \`infrastructure/\` - Database connection
 
-### packages/frontend/src/ (planned)
+### packages/frontend/src/
 - \`components/\` - React components
 - \`hooks/\` - Custom React hooks
 - \`api/\` - API client for chat
 
 ---
 
-**Last Updated:** ${new Date().toLocaleDateString()}
+**Last Updated:** ${nowPretty}
 `);
 
 const content = output.join('\n');
-fs.writeFileSync('PROJECT_STRUCTURE.txt', content);
-console.log('✅ Generated PROJECT_STRUCTURE.txt');
+
+// 🔁 Write Markdown instead of .txt
+fs.writeFileSync('PROJECT_STRUCTURE.md', content);
+console.log('✅ Generated PROJECT_STRUCTURE.md');

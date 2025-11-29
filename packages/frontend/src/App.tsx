@@ -1,12 +1,8 @@
-import React from 'react';
+import React from "react";
+import ChatWindow from "./components/ChatWindow";
 
-function App() {
-  return (
-    <div>
-      <h1>Lead Manager Chat</h1>
-      <p>Chat interface coming soon...</p>
-    </div>
-  );
-}
+const App: React.FC = () => {
+  return <ChatWindow />;
+};
 
 export default App;

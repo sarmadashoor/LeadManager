@@ -1,322 +1,364 @@
-# @lead-manager/chat
+# Lead Orchestrator
 
-AI-powered chat API for automotive service leads using Claude and OpenAI.
+AI-powered lead management system for automotive service franchises.  
+Integrates with Shopmonkey CRM, automates customer communications, and provides intelligent AI chat support.
 
-**Status:** ✅ Core API Complete, 🚧 Production Integration Needed  
-**Tests:** 33 passing  
-**Port:** 3001
+**Status:**
+
+- **Orchestrator:** Production-ready
+- **Chat API:** Core Complete (needs catalog integration, frontend, auth)
+- **Frontend:** Not started
+- **Tests:** 80+ passing across all packages
+- **Architecture:** Monorepo with 4 packages
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Node.js 18+
+- Docker (PostgreSQL)
+- ngrok (for webhook testing)
+
+### Installation
+
 ```bash
-# Install dependencies (from workspace root)
+# Clone repository
+git clone <repo-url>
+cd LeadManager
+
+# Install dependencies (all packages)
 npm install
 
-# Set up environment variables
-cp .env.example .env
-# Add your API keys to .env
-
-# Run tests
-npm test
-
-# Start server
-npm run dev
+# Start PostgreSQL
+docker-compose up -d
 ```
 
-Server will start at `http://localhost:3001`
+Run database migrations:
 
----
-
-## Environment Variables
-
-Create a `.env` file in this directory:
 ```bash
-# Database (same as orchestrator)
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/lead_orchestrator
+cd packages/orchestrator
+npm run migrate
+cd ../..
+```
 
-# AI Providers (need at least one)
-ANTHROPIC_API_KEY=sk-ant-api03-...
-OPENAI_API_KEY=sk-proj-...
+Set up environment variables:
 
-# Optional
-AI_PROVIDER=claude        # or 'openai'
-PORT=3001
-LOG_LEVEL=info
-CORS_ORIGIN=*
+```bash
+cp packages/orchestrator/.env.example packages/orchestrator/.env
+cp packages/chat/.env.example packages/chat/.env
+# Edit both .env files with real credentials
 ```
 
 ---
 
-## API Endpoints
+## ▶️ Run Everything
 
-### POST /api/chat/:leadId/message
-Send a message and get AI response.
+### Terminal 1 — Orchestrator (Lead engine)
 
-**Request:**
-```json
-{
-  "message": "How much does ceramic tint cost?"
-}
+```bash
+cd packages/orchestrator
+npm run dev
+# http://localhost:3000
 ```
 
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "content": "For your Toyota Camry, our Supreme Tint Package...",
-    "provider": "claude",
-    "metadata": {
-      "tokens_used": {"input": 263, "output": 76},
-      "latency_ms": 3138
-    }
-  }
-}
+### Terminal 2 — Chat API (AI engine)
+
+```bash
+cd packages/chat
+npm run dev
+# http://localhost:3001
 ```
 
-### GET /api/chat/:leadId/stream
-Server-Sent Events streaming (word-by-word).
+### Terminal 3 — ngrok (Webhook exposure)
 
-**Query params:** `?message=Hello`
-
-**Response:** SSE stream
-```
-data: {"text":"Hello "}
-data: {"text":"there! "}
-data: {"done":true,"provider":"claude"}
-```
-
-### GET /api/chat/:leadId/history
-Get conversation history.
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "...",
-      "role": "user",
-      "content": "How much for tint?",
-      "created_at": "2025-11-27T08:36:02.581Z"
-    }
-  ]
-}
-```
-
-### GET /api/chat/:leadId/context
-Get lead context (customer, vehicle, services).
-
-### GET /health
-Check AI provider status.
-
-**Response:**
-```json
-{
-  "status": "ok",
-  "providers": {
-    "claude": true,
-    "openai": true
-  }
-}
+```bash
+ngrok http 3000
+# Copy HTTPS URL for Shopmonkey webhook settings
 ```
 
 ---
 
-## Architecture
+## Verify Installation
+
+```bash
+# Orchestrator health
+curl http://localhost:3000/health
+
+# Chat API health
+curl http://localhost:3001/health
+
+# Test chat
+curl -X POST http://localhost:3001/api/chat/LEAD_ID/message \
+  -H "Content-Type: application/json" \
+  -d '{"message": "How much for ceramic tint?"}'
 ```
-Request → ChatController → ChatService → AIService → Claude/OpenAI
-                              ↓              ↓
-                     ChatMessageRepository  LeadContextRepository
-                              ↓              ↓
-                           PostgreSQL Database
-```
-
-### Key Components
-
-**AI Layer (`src/ai/`)**
-- `AIService.ts` - Main orchestrator, switches between providers
-- `providers/ClaudeProvider.ts` - Anthropic Claude integration
-- `providers/OpenAIProvider.ts` - OpenAI GPT integration
-- `providers/AIProvider.ts` - Provider interface
-
-**API Layer (`src/api/`)**
-- `controllers/ChatController.ts` - HTTP request handlers
-- `routes.ts` - Fastify route registration
-
-**Service Layer (`src/services/`)**
-- `ChatService.ts` - Business logic, orchestrates AI and data
-
-**Data Layer (`src/repositories/`)**
-- `ChatMessageRepository.ts` - Chat messages and sessions
-- `LeadContextRepository.ts` - Lead data for AI context
 
 ---
 
-## Testing
+## 🏗️ Architecture
+
+```
+┌────────────────────────────────────────────────────────────┐
+│  Shopmonkey CRM → ngrok → Orchestrator (3000)              │
+│                                ↓                            │
+│                     PostgreSQL (shared) ← Chat API (3001)  │
+│                                ↓                            │
+│                        Outbound SMS / Email                 │
+└────────────────────────────────────────────────────────────┘
+```
+
+### Packages
+
+| Package | Purpose | Port | Status |
+|---------|---------|------|--------|
+| `orchestrator` | Lead engine, Shopmonkey integration, SMS/email | 3000 | ✅ Production-Ready |
+| `chat` | AI chat engine (Claude + OpenAI) | 3001 | ✅ Core OK, 🚧 Needs service catalog, auth, frontend |
+| `frontend` | React chat interface | 5173 | 🚧 Not Started |
+| `shared` | Centralized TypeScript types | — | 📦 Ready |
+
+---
+
+## 🎯 Features
+
+### ✅ Completed
+
+#### Lead Management (Orchestrator)
+
+- Real-time Shopmonkey webhook processing (<100ms)
+- 30s backup polling (fail-safe)
+- Multi-tenant DB: supports 200+ franchise locations
+- Twilio SMS automation (touch points, follow-ups)
+- SendGrid email automation
+- Lead lifecycle + status tracking
+- Touch point cadence engine (every 10s check)
+
+#### AI Chat (Chat API)
+
+**Note:** Core API is complete. Catalog integration (real services), auth, and frontend UI are still pending.
+
+- Multi-provider AI routing
+  - Claude Sonnet 4.5
+  - OpenAI GPT-4o
+- 4 REST endpoints
+- SSE streaming
+- Conversation history + sessions
+- Provider-level metadata: latency, tokens, model
+- 33 tests (API, services, repos, providers)
+
+### 🚧 In Progress
+
+- React chat UI (`packages/frontend`)
+- Real catalog integration in Chat API
+- Omnichannel chat link (email → web chat)
+- Booking pipeline
+
+### 📋 Planned
+
+- Production deployment playbooks
+- Additional CRM integrations (Shopmonkey alternatives)
+- Analytics dashboard for franchises
+- Rate limiting per lead/tenant
+
+---
+
+## 📚 Documentation
+
+### Start Here (for LLMs + Devs)
+
+- **Navigation Guide:** `docs/START_HERE.md`
+- **Project Structure:** `PROJECT_STRUCTURE.txt`
+- **Architecture Overview:** `docs/architecture/SYSTEM_OVERVIEW.md`
+- **Current System State:** `docs/HANDOFF.md`
+
+### Package READMEs
+
+- **Orchestrator** — `packages/orchestrator/README.md`
+- **Chat API** — `packages/chat/README.md`
+- **Chat API Reference** — `packages/chat/API.md`
+
+### Additional Docs
+
+- **MVP Logic** — `docs/MVP_LOGIC.md`
+- **Implementation History** — `docs/architecture/PHASED_IMPLEMENTATION.md`
+- **Roadmap / Next Steps** — `docs/next_steps.md`
+
+---
+
+## 🧪 Testing
+
 ```bash
 # Run all tests
 npm test
 
+# Per package
+cd packages/chat && npm test
+cd packages/orchestrator && npm test
+
 # Watch mode
-npm test:watch
+npm test -- --watch
 
 # Coverage
-npm test:coverage
-
-# Specific test file
-npm test ChatMessageRepository
+npm test -- --coverage
 ```
 
-**Test Coverage:** 33 tests across 6 suites
-- ChatMessageRepository: 7 tests (database operations)
-- ChatService: 8 tests (business logic)
-- ChatController: 8 tests (HTTP layer)
-- AI Providers: 10 tests (Claude + OpenAI)
+### 📊 Test Summary
+
+- **Orchestrator:** 47 tests
+- **Chat API:** 33 tests
+- **Total:** 80+ passing
 
 ---
 
-## AI Provider Configuration
+## 🛠️ Technology Stack
 
-### Claude (Default)
-- Model: `claude-sonnet-4-20250514`
-- Latency: 3-7 seconds
-- Cost: ~$0.005 per message
-- Style: Conversational, detailed
+### Backend
 
-### OpenAI
-- Model: `gpt-4o`
-- Latency: 1-2 seconds
-- Cost: ~$0.002 per message
-- Style: Concise, direct
+- Node.js 18+
+- TypeScript
+- Fastify
+- PostgreSQL (Docker)
+- Knex.js (migrations & queries)
+- Jest (tests)
 
-**Switch providers:**
-```bash
-# In .env file
-AI_PROVIDER=openai  # or 'claude'
-```
+### AI
 
----
+- Claude Sonnet 4.5
+- GPT-4o
+- Complete provider abstraction layer
+- ~$0.002–$0.005 per message
 
-## Database Schema
+### External Systems
 
-### chat_sessions
-- `id` (uuid, primary key)
-- `tenant_id` (uuid, foreign key → tenants)
-- `lead_id` (uuid, foreign key → leads)
-- `status` (varchar) - 'active', 'completed', 'abandoned'
-- `started_at`, `last_message_at`, `completed_at` (timestamps)
-- `messages_count`, `total_tokens_used` (integers)
+- Shopmonkey API v3
+- Twilio
+- SendGrid
+- ngrok
 
-### chat_messages
-- `id` (uuid, primary key)
-- `session_id` (uuid, foreign key → chat_sessions)
-- `lead_id` (uuid, foreign key → leads)
-- `role` (varchar) - 'user', 'assistant'
-- `content` (text)
-- `metadata` (jsonb) - tokens, latency, provider info
-- `created_at` (timestamp)
+### Frontend (planned)
+
+- React + Vite
+- Tailwind or ShadCN (TBD)
 
 ---
 
-## Development
+## 📊 Performance
 
-### Adding a New AI Provider
-
-1. Create provider in `src/ai/providers/`:
-```typescript
-export class GeminiProvider implements AIProvider {
-  async generateResponse(context, message) {
-    // Implementation
-  }
-  
-  calculateCost(tokens) {
-    // Pricing logic
-  }
-}
-```
-
-2. Register in `src/ai/providers/index.ts`
-3. Add configuration to `src/config/ai-config.ts`
-4. Add tests
-
-### Adding a New Endpoint
-
-1. Add method to `ChatController`
-2. Register route in `routes.ts`
-3. Add tests in `ChatController.test.ts`
+| Metric | Value |
+|--------|-------|
+| Webhook response | <100ms |
+| Chat response (Claude) | 3–7s |
+| Chat response (OpenAI) | 1–2s |
+| SMS Delivery | 1–2s |
+| Email Delivery | 1–3s |
+| Lead Polling | 30s |
+| Touch point engine | 10s |
 
 ---
 
-## Troubleshooting
-
-**"No AI providers configured"**
-- Check `.env` file exists in this directory
-- Verify at least one API key is set
-- Restart the server
-
-**"Lead not found"**
-- Verify lead exists in database
-- Check lead_id is valid UUID
-- Ensure database connection works
-
-**"Port 3001 already in use"**
-```bash
-lsof -ti:3001 | xargs kill -9
-npm run dev
-```
-
-**Tests failing**
-```bash
-# Clean install
-rm -rf node_modules
-npm install
-npm test
-```
-
----
-
-## Performance
-
-**Response Times:**
-- Health check: <50ms
-- Message (Claude): 3-7s
-- Message (OpenAI): 1-2s
-- History retrieval: <100ms
-- Context retrieval: <50ms
-
-**Concurrency:**
-- Handles 10-20 concurrent chats
-- Each request is independent
-- No shared state between requests
-
----
-
-## Deployment
+## 🚢 Deployment
 
 ### Development
+
 ```bash
-npm run dev  # Port 3001
+npm run dev:orchestrator   # Terminal 1
+npm run dev:chat           # Terminal 2
+ngrok http 3000            # Terminal 3
 ```
 
-### Production
-```bash
-npm run build
-node dist/server.js
-```
+### Production (future)
 
-**Environment:** Set `NODE_ENV=production`
+- Cloud VM or Kubernetes
+- NGINX/Caddy reverse proxy
+- SSL termination
+- Managed PostgreSQL
+- Webhook URL configured in Shopmonkey
+- Centralized logging + monitoring
 
 ---
 
-## Related Documentation
+## 🔧 Common Issues
 
-- **API Reference:** `API.md`
-- **Architecture:** `../../docs/architecture/SYSTEM_OVERVIEW.md`
-- **Implementation History:** `../../docs/architecture/PHASED_IMPLEMENTATION.md`
+### Port already in use
+
+```bash
+lsof -ti:3000 | xargs kill -9
+lsof -ti:3001 | xargs kill -9
+```
+
+### Database not running
+
+```bash
+docker-compose up -d
+npm run migrate
+```
+
+### Webhooks not triggering
+
+- Ensure ngrok tunnel is active
+- Verify Shopmonkey webhook URL
+- Check orchestrator logs
+
+### Chat API errors
+
+- Missing API keys in `packages/chat/.env`
+- Database URL incorrect
 
 ---
 
-**Maintained by:** Lead Orchestrator Team  
+## 🤝 Contributing
+
+### Workflow
+
+1. Create branch
+2. Implement feature
+3. Run tests
+4. Update docs
+5. PR
+
+### Code Style
+
+- TypeScript strict mode
+- ESLint + Prettier
+- Unit tests required
+- Document all public APIs
+
+---
+
+## 📝 Environment Variables
+
+### Orchestrator (`packages/orchestrator/.env`)
+
+- `DATABASE_URL`
+- `SHOPMONKEY_API_KEY`
+- `TWILIO_*`
+- `SENDGRID_*`
+- `TENANT_ID`
+
+### Chat (`packages/chat/.env`)
+
+- `DATABASE_URL`
+- `ANTHROPIC_API_KEY`
+- `OPENAI_API_KEY`
+- `AI_PROVIDER`
+
+---
+
+## 📞 Support
+
+- **Documentation:** `docs/`
+- **Architecture:** `docs/architecture/`
+- **Issues:** GitHub Issues
+
+---
+
+## 📄 License
+
+[Your License Here]
+
+---
+
+**Built with ❤️ for Tint World® and automotive service franchises**
+
 **Last Updated:** November 27, 2025

@@ -1,6 +1,6 @@
 # Lead Orchestrator - Project Structure
 
-**Generated:** 2025-11-27T20:33:39.827Z
+**Generated:** 2025-11-28T19:30:57.818Z
 **Status:** Chat API Complete, Frontend Next
 
 This file is auto-generated. Run `node generate-structure.js` to update.
@@ -11,7 +11,7 @@ This file is auto-generated. Run `node generate-structure.js` to update.
 
 - **orchestrator/** - Main lead management service (Shopmonkey, SMS, webhooks)
 - **chat/** - AI chat API with Claude + OpenAI (REST + SSE streaming)
-- **frontend/** - React chat UI (not started yet)
+- **frontend/** - React chat UI - customer interface (port 5173)
 - **shared/** - Shared TypeScript types
 
 ---
@@ -61,11 +61,14 @@ LeadManager/
 │   │   └── tsconfig.json
 │   ├── frontend # React chat UI - customer interface (port 5173)
 │   │   ├── index.html
+│   │   ├── jest.config.cjs
 │   │   ├── package.json
 │   │   ├── src
 │   │   │   ├── App.tsx
 │   │   │   ├── components
-│   │   │   └── main.tsx
+│   │   │   ├── jest-dom.d.ts
+│   │   │   ├── main.tsx
+│   │   │   └── setupTests.ts
 │   │   ├── tsconfig.json
 │   │   ├── tsconfig.node.json
 │   │   └── vite.config.ts
@@ -123,7 +126,7 @@ LeadManager/
 - `packages/orchestrator/src/index.ts` - Orchestrator main
 - `packages/chat/src/server.ts` - Chat API server
 - `packages/chat/src/api/routes.ts` - Chat API routes
-- `packages/frontend/src/App.tsx` - Frontend main (not built)
+- `packages/frontend/src/App.tsx` - Frontend main
 
 ### Tests
 - `packages/orchestrator/src/__tests__/` - Orchestrator tests
@@ -152,11 +155,11 @@ LeadManager/
 - `services/` - Business logic (ChatService)
 - `infrastructure/` - Database connection
 
-### packages/frontend/src/ (planned)
+### packages/frontend/src/
 - `components/` - React components
 - `hooks/` - Custom React hooks
 - `api/` - API client for chat
 
 ---
 
-**Last Updated:** 11/27/2025
+**Last Updated:** 11/28/2025
