@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom";
+import * as streamingModule from "../api/streaming";
 import { describe, it, expect, beforeEach, jest } from "@jest/globals";
 import {
   render,
@@ -7,6 +8,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
+
 
 import ChatWindow from "./ChatWindow";
 
@@ -23,7 +25,7 @@ jest.mock("../api/client", () => ({
 import { fetchLeadContext, fetchChatHistory } from "../api/chat";
 import { apiPost } from "../api/client";
 
-// Cast to jest.Mock-ish types; we'll still cast as any at call sites to avoid TS "never" noise
+// Cast to jest.Mock-ish types; we’ll still cast as any at call sites
 const mockFetchLeadContext = fetchLeadContext as unknown as jest.Mock;
 const mockFetchChatHistory = fetchChatHistory as unknown as jest.Mock;
 const mockApiPost = apiPost as unknown as jest.Mock;
@@ -181,5 +183,162 @@ describe("ChatWindow (with context + history)", () => {
       (expect(userMsg) as any).toBeInTheDocument();
       (expect(aiMsg) as any).toBeInTheDocument();
     });
+  });
+
+  it("shows typing indicator while message is sending", async () => {
+    (mockFetchLeadContext as any).mockResolvedValue({});
+    (mockFetchChatHistory as any).mockResolvedValue([]);
+
+    let resolvePost: ((value: any) => void) | null = null;
+    (mockApiPost as any).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvePost = resolve;
+        })
+    );
+
+    renderWithRoute();
+
+    const input = screen.getByPlaceholderText("Type a message…");
+    const button = screen.getByRole("button", { name: /send/i });
+
+    await userEvent.type(input, "Hello typing");
+    await userEvent.click(button);
+
+    // While the promise is pending, typing indicator should be visible
+    const typingNode = screen.getByText(/Assistant is typing…/i);
+    (expect(typingNode) as any).toBeInTheDocument();
+
+
+    // Now resolve the POST and ensure typing indicator disappears
+    if (resolvePost) {
+      resolvePost({
+        data: { content: "Done", provider: "claude" },
+      });
+    }
+
+    await waitFor(() => {
+      (expect(
+        screen.queryByText(/Tint Assistant is typing…/i)
+      ) as any).toBeNull();
+      const reply = screen.getByText("Done");
+      (expect(reply) as any).toBeInTheDocument();
+    });
+  });
+
+  it("shows an error banner and hides typing indicator when send fails", async () => {
+    (mockFetchLeadContext as any).mockResolvedValue({});
+    (mockFetchChatHistory as any).mockResolvedValue([]);
+    (mockApiPost as any).mockRejectedValue(new Error("Boom"));
+
+    renderWithRoute();
+
+    const input = screen.getByPlaceholderText("Type a message…");
+    const button = screen.getByRole("button", { name: /send/i });
+
+    await userEvent.type(input, "Hello error");
+    await userEvent.click(button);
+
+    await waitFor(() => {
+      const errorNode = screen.getByText(
+        "We couldn't send your message. Please try again."
+      );
+      (expect(errorNode) as any).toBeInTheDocument();
+    });
+
+    (expect(
+      screen.queryByText(/Tint Assistant is typing…/i)
+    ) as any).toBeNull();
+  });
+});
+describe("ChatWindow streaming mode (SSE)", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
+  });
+
+  it("uses streaming API and progressively renders assistant reply when streaming is enabled", async () => {
+    (mockFetchLeadContext as any).mockResolvedValue({});
+    (mockFetchChatHistory as any).mockResolvedValue([]);
+
+    const sendSpy = jest.spyOn(streamingModule, "sendStreamingMessage");
+    jest
+      .spyOn(streamingModule, "isStreamingEnabled")
+      .mockReturnValue(true);
+
+    renderWithRoute();
+
+    const input = screen.getByPlaceholderText("Type a message…");
+    const button = screen.getByRole("button", { name: /send/i });
+
+    await userEvent.type(input, "Stream this");
+    await userEvent.click(button);
+
+    // ChatWindow should call sendStreamingMessage instead of apiPost
+    await waitFor(() => {
+      (expect(sendSpy) as any).toHaveBeenCalledTimes(1);
+    });
+    (expect(mockApiPost) as any).not.toHaveBeenCalled();
+
+    // Grab callbacks passed into sendStreamingMessage
+    const [, , callbacks] = sendSpy.mock.calls[0] as [
+      string,
+      string,
+      { onChunk: (t: string) => void; onDone: () => void; onError: (e: unknown) => void }
+    ];
+
+    // Simulate partial chunks coming from SSE
+    callbacks.onChunk("Hello ");
+    callbacks.onChunk("world");
+    callbacks.onDone();
+
+    // Assistant message should show combined chunks
+    await waitFor(() => {
+      const aiMsg = screen.getByText("Hello world");
+      (expect(aiMsg) as any).toBeInTheDocument();
+    });
+  });
+
+  it("closes the stream when the component unmounts", async () => {
+    (mockFetchLeadContext as any).mockResolvedValue({});
+    (mockFetchChatHistory as any).mockResolvedValue([]);
+
+    const cancelFn = jest.fn();
+    const sendSpy = jest
+      .spyOn(streamingModule, "sendStreamingMessage")
+      .mockImplementation(
+        (
+          _leadId: string,
+          _message: string,
+          _callbacks: {
+            onChunk: (t: string) => void;
+            onDone: () => void;
+            onError: (e: unknown) => void;
+          }
+        ) => {
+          // We don't need to simulate chunks here; just return a cancel function
+          return cancelFn;
+        }
+      );
+
+    jest
+      .spyOn(streamingModule, "isStreamingEnabled")
+      .mockReturnValue(true);
+
+    const { unmount } = renderWithRoute();
+
+    const input = screen.getByPlaceholderText("Type a message…");
+    const button = screen.getByRole("button", { name: /send/i });
+
+    await userEvent.type(input, "Stream cleanup");
+    await userEvent.click(button);
+
+    await waitFor(() => {
+      (expect(sendSpy) as any).toHaveBeenCalledTimes(1);
+    });
+
+    // When the component unmounts, it should call the cleanup function
+    unmount();
+    (expect(cancelFn) as any).toHaveBeenCalled();
   });
 });

@@ -1,12 +1,17 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useParams } from "react-router-dom";
+
 import { apiPost } from "../api/client";
+import { fetchLeadContext, fetchChatHistory } from "../api/chat";
 import {
-  fetchLeadContext,
-  fetchChatHistory,
-  LeadContext,
-  ChatHistoryItem,
-} from "../api/chat";
+  isStreamingEnabled,
+  sendStreamingMessage,
+} from "../api/streaming";
 
 type ChatMessage = {
   id: string;
@@ -15,83 +20,107 @@ type ChatMessage = {
   createdAt?: string;
 };
 
+type LeadContext = {
+  leadId: string;
+  vehicle?: {
+    year?: string;
+    make?: string;
+    model?: string;
+  };
+  services?: string[];
+} | null;
+
 const ChatWindow: React.FC = () => {
   const { leadId } = useParams<{ leadId: string }>();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
-
   const [error, setError] = useState<string | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [headerContext, setHeaderContext] = useState<LeadContext>(null);
 
-  const [context, setContext] = useState<LeadContext | null>(null);
-  const [isLoadingContext, setIsLoadingContext] = useState(true);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  // Auto-scroll reference
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  const messagesEndRef = React.useRef<HTMLDivElement | null>(null);
+  // Holds the active streaming-cancel function (if streaming is in progress)
+  const streamCancelRef = useRef<(() => void) | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // Scroll every time messages update
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Validate leadId immediately
+  // Load context + history on mount / when leadId changes
   useEffect(() => {
     if (!leadId) {
       setError("Invalid chat link: missing leadId in URL.");
+      return;
     }
-  }, [leadId]);
 
-  // Load lead context
-  useEffect(() => {
-    if (!leadId) return;
+    let cancelled = false;
 
-    const loadContext = async () => {
+    const loadContextAndHistory = async () => {
+      setIsLoadingHistory(true);
+      setError(null);
+
       try {
-        const data = await fetchLeadContext(leadId);
-        setContext(data);
-      } catch (err: any) {
+        const [ctx, history] = await Promise.all([
+          fetchLeadContext(leadId),
+          fetchChatHistory(leadId),
+        ]);
+
+        if (cancelled) return;
+
+        if (ctx) {
+          setHeaderContext(ctx as LeadContext);
+        }
+
+        if (Array.isArray(history)) {
+          const sorted = [...history].sort((a, b) => {
+            const at = a.createdAt
+              ? new Date(a.createdAt).getTime()
+              : 0;
+            const bt = b.createdAt
+              ? new Date(b.createdAt).getTime()
+              : 0;
+            return at - bt;
+          });
+          setMessages(sorted);
+        }
+      } catch (err) {
         console.error(err);
-        setError("Unable to load lead information.");
+        if (!cancelled) {
+          setError("Unable to load chat history.");
+        }
       } finally {
-        setIsLoadingContext(false);
+        if (!cancelled) {
+          setIsLoadingHistory(false);
+        }
       }
     };
 
-    loadContext();
+    loadContextAndHistory();
+
+    return () => {
+      cancelled = true;
+    };
   }, [leadId]);
 
-  // Load history (with BEST UX sorting)
+  // Cleanup any active stream on unmount
   useEffect(() => {
-    if (!leadId) return;
-
-    const loadHistory = async () => {
-      try {
-        const history = await fetchChatHistory(leadId);
-
-        const sorted = [...history].sort((a, b) => {
-          if (a.createdAt && b.createdAt) {
-            return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-          }
-          return 0;
-        });
-
-        setMessages(sorted);
-      } catch (err: any) {
-        console.error(err);
-        setError("Unable to load chat history.");
-      } finally {
-        setIsLoadingHistory(false);
+    return () => {
+      if (streamCancelRef.current) {
+        streamCancelRef.current();
+        streamCancelRef.current = null;
       }
     };
+  }, []);
 
-    loadHistory();
-  }, [leadId]);
-
-  // Send message
   const handleSend = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault();
@@ -101,19 +130,68 @@ const ChatWindow: React.FC = () => {
         return;
       }
 
-      if (!input.trim()) return;
+      const trimmed = input.trim();
+      if (!trimmed) return;
 
       const userMessage: ChatMessage = {
         id: `user-${Date.now()}`,
         role: "user",
-        content: input.trim(),
+        content: trimmed,
       };
 
+      // Append user message immediately
       setMessages((prev) => [...prev, userMessage]);
       setInput("");
       setIsSending(true);
       setError(null);
 
+      // STREAMING MODE
+      if (isStreamingEnabled()) {
+        // Cancel any previous stream
+        if (streamCancelRef.current) {
+          streamCancelRef.current();
+          streamCancelRef.current = null;
+        }
+
+        const assistantId = `assistant-${Date.now()}`;
+
+        // Start with an empty assistant bubble
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: assistantId,
+            role: "assistant",
+            content: "",
+          },
+        ]);
+
+        const cancel = sendStreamingMessage(leadId, trimmed, {
+          onChunk: (chunk: string) => {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId
+                  ? { ...m, content: (m.content ?? "") + chunk }
+                  : m
+              )
+            );
+          },
+          onDone: () => {
+            setIsSending(false);
+          },
+          onError: (err: unknown) => {
+            console.error(err);
+            setError(
+              "We couldn't send your message. Please try again."
+            );
+            setIsSending(false);
+          },
+        });
+
+        streamCancelRef.current = cancel;
+        return;
+      }
+
+      // FALLBACK: non-streaming POST
       try {
         const data = await apiPost(
           `/api/chat/${encodeURIComponent(leadId)}/message`,
@@ -133,9 +211,11 @@ const ChatWindow: React.FC = () => {
         };
 
         setMessages((prev) => [...prev, assistantMessage]);
-      } catch (err: any) {
+      } catch (err) {
         console.error(err);
-        setError(err.message || "Failed to send message.");
+        setError(
+          "We couldn't send your message. Please try again."
+        );
       } finally {
         setIsSending(false);
       }
@@ -151,6 +231,27 @@ const ChatWindow: React.FC = () => {
       </div>
     );
   }
+
+  // Build header context line from loaded context
+  const vehicle = headerContext?.vehicle;
+  const services = headerContext?.services ?? [];
+  const hasVehicle =
+    vehicle &&
+    (vehicle.year || vehicle.make || vehicle.model);
+
+  const vehicleLine = hasVehicle
+    ? `${vehicle.year ?? ""} ${vehicle.make ?? ""} ${
+        vehicle.model ?? ""
+      }`.trim()
+    : null;
+
+  const servicesLine =
+    services.length > 0 ? ` • ${services.join(", ")}` : "";
+
+  const headerLine =
+    vehicleLine || servicesLine
+      ? `${vehicleLine ?? ""}${servicesLine}`
+      : "Ask anything about your vehicle or booking.";
 
   return (
     <div
@@ -174,7 +275,6 @@ const ChatWindow: React.FC = () => {
           overflow: "hidden",
         }}
       >
-        {/* HEADER */}
         <header
           style={{
             padding: "0.75rem 1rem",
@@ -187,38 +287,30 @@ const ChatWindow: React.FC = () => {
           }}
         >
           <div>
-            <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>
+            <div
+              style={{
+                fontSize: "0.9rem",
+                fontWeight: 600,
+              }}
+            >
               Tint Chat Assistant
             </div>
-
-            <div style={{ fontSize: "0.75rem", opacity: 0.8 }}>
-              {/* Context */}
-              {isLoadingContext && "Loading lead…"}
-
-              {!isLoadingContext && context && (
-                <>
-                  {context.vehicle?.year} {context.vehicle?.make}{" "}
-                  {context.vehicle?.model}
-                  {context.services?.length
-                    ? ` • ${context.services.join(", ")}`
-                    : ""}
-                  <br />
-                  Lead: {leadId}
-                </>
-              )}
-
-              {!isLoadingContext && !context && (
-                <span style={{ color: "red" }}>Context unavailable</span>
-              )}
+            <div
+              style={{
+                fontSize: "0.75rem",
+                opacity: 0.8,
+              }}
+            >
+              {headerLine}
+              <br />
+              Lead: {leadId}
             </div>
           </div>
-
           <div style={{ fontSize: "0.75rem" }}>
             {isSending ? "Thinking…" : "Online"}
           </div>
         </header>
 
-        {/* MESSAGES */}
         <div
           style={{
             flex: 1,
@@ -227,19 +319,7 @@ const ChatWindow: React.FC = () => {
             background: "#f9fafb",
           }}
         >
-          {isLoadingHistory && (
-            <div
-              style={{
-                textAlign: "center",
-                color: "#6b7280",
-                fontSize: "0.85rem",
-              }}
-            >
-              Loading chat history…
-            </div>
-          )}
-
-          {!isLoadingHistory && messages.length === 0 && (
+          {messages.length === 0 && !isLoadingHistory && (
             <div
               style={{
                 fontSize: "0.85rem",
@@ -248,56 +328,71 @@ const ChatWindow: React.FC = () => {
                 marginTop: "1rem",
               }}
             >
-              Ask anything about pricing, tint options, or booking an appointment.
+              Ask anything about pricing, tint options, or booking an
+              appointment.
             </div>
           )}
 
-          {!isLoadingHistory &&
-            messages.map((msg) => (
-              <div
-                key={msg.id}
-                style={{
-                  display: "flex",
-                  justifyContent:
-                    msg.role === "user" ? "flex-end" : "flex-start",
-                  marginBottom: "0.5rem",
-                }}
-              >
-                <div
-                  style={{
-                    maxWidth: "80%",
-                    padding: "0.5rem 0.75rem",
-                    borderRadius: "999px",
-                    fontSize: "0.85rem",
-                    lineHeight: 1.4,
-                    background:
-                      msg.role === "user" ? "#111827" : "#e5e7eb",
-                    color: msg.role === "user" ? "#f9fafb" : "#111827",
-                  }}
-                >
-                  {msg.content}
-                </div>
-              </div>
-            ))}
-
-          {/* Error */}
-          {error && (
+          {messages.map((msg) => (
             <div
+              key={msg.id}
               style={{
-                marginTop: "0.5rem",
-                fontSize: "0.8rem",
-                color: "red",
-                textAlign: "center",
+                display: "flex",
+                justifyContent:
+                  msg.role === "user" ? "flex-end" : "flex-start",
+                marginBottom: "0.5rem",
               }}
             >
-              {error}
+              <div
+                style={{
+                  maxWidth: "80%",
+                  padding: "0.5rem 0.75rem",
+                  borderRadius: "999px",
+                  fontSize: "0.85rem",
+                  lineHeight: 1.4,
+                  background:
+                    msg.role === "user" ? "#111827" : "#e5e7eb",
+                  color:
+                    msg.role === "user"
+                      ? "#f9fafb"
+                      : "#111827",
+                }}
+              >
+                {msg.content}
+              </div>
             </div>
-          )}
+          ))}
 
+          {/* Auto-scroll anchor */}
           <div ref={messagesEndRef} />
         </div>
 
-        {/* INPUT */}
+        {error && (
+          <div
+            style={{
+              padding: "0.5rem 1rem",
+              fontSize: "0.8rem",
+              color: "#b91c1c",
+              background: "#fee2e2",
+              borderTop: "1px solid #fecaca",
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        {isSending && (
+          <div
+            style={{
+              padding: "0.25rem 1rem",
+              fontSize: "0.8rem",
+              color: "#6b7280",
+            }}
+          >
+            Assistant is typing…
+          </div>
+        )}
+
         <form
           onSubmit={handleSend}
           style={{
@@ -331,7 +426,7 @@ const ChatWindow: React.FC = () => {
               borderRadius: "999px",
               border: "none",
               fontSize: "0.9rem",
-              background: isSending ? "#9ca3af" : "#111827",
+              background: "#111827",
               color: "#f9fafb",
               cursor: isSending ? "default" : "pointer",
             }}
