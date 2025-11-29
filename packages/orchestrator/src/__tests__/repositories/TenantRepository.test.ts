@@ -1,10 +1,10 @@
-import { describe, it, expect, afterAll, afterEach } from 'vitest';
-import { db } from '../../infrastructure/persistence/db';
-import { TenantRepository } from '../../infrastructure/persistence/repositories/TenantRepository';
+// @ts-nocheck
+const { db } = require('../../infrastructure/persistence/db');
+const { TenantRepository } = require('../../infrastructure/persistence/repositories/TenantRepository');
 
 describe('TenantRepository', () => {
   const repo = new TenantRepository();
-  const createdTenantIds: string[] = [];
+  const createdTenantIds = [];
 
   afterEach(async () => {
     for (const id of createdTenantIds) {
@@ -38,8 +38,13 @@ describe('TenantRepository', () => {
       createdTenantIds.push(created.id);
 
       const found = await repo.findBySlug(slug);
+
       expect(found).not.toBeNull();
-      expect(found!.name).toBe('Find Me');
+      if (!found) {
+        throw new Error('Expected tenant to be found');
+      }
+
+      expect(found.name).toBe('Find Me');
     });
 
     it('should return null for non-existent slug', async () => {
@@ -68,7 +73,10 @@ describe('TenantRepository', () => {
 
       const retrieved = await repo.getCRMConfig(tenant.id);
       expect(retrieved).not.toBeNull();
-      expect(retrieved!.crm_type).toBe('shopmonkey');
+      if (!retrieved) {
+        throw new Error('Expected CRM config to be retrieved');
+      }
+      expect(retrieved.crm_type).toBe('shopmonkey');
     });
   });
 
@@ -88,8 +96,13 @@ describe('TenantRepository', () => {
       await repo.updateLastPolled(tenant.id, 'success');
 
       const config = await repo.getCRMConfig(tenant.id);
-      expect(config!.last_poll_status).toBe('success');
-      expect(config!.consecutive_failures).toBe(0);
+      expect(config).not.toBeNull();
+      if (!config) {
+        throw new Error('Expected CRM config to be retrieved');
+      }
+
+      expect(config.last_poll_status).toBe('success');
+      expect(config.consecutive_failures).toBe(0);
     });
   });
 });

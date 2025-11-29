@@ -1,6 +1,6 @@
 # Lead Orchestrator - Project Structure
 
-**Generated:** 2025-11-28T19:30:57.818Z
+**Generated:** 2025-11-29T08:34:08.249Z
 **Status:** Chat API Complete, Frontend Next
 
 This file is auto-generated. Run `node generate-structure.js` to update.
@@ -23,7 +23,7 @@ LeadManager/
 
 ├── .env
 ├── .gitignore
-├── PROJECT_STRUCTURE.txt
+├── PROJECT_STRUCTURE.md
 ├── README.md
 ├── docker-compose.yml
 ├── docs # Documentation and guides
@@ -49,15 +49,33 @@ LeadManager/
 │   │   ├── package.json
 │   │   ├── src
 │   │   │   ├── __tests__
+│   │   │   │   ├── contracts
+│   │   │   │   │   └── LeadContextContract.test.ts
+│   │   │   │   ├── setup.ts
+│   │   │   │   └── test-utils.ts
 │   │   │   ├── ai
+│   │   │   │   ├── AIService.ts
+│   │   │   │   └── providers
 │   │   │   ├── api
+│   │   │   │   ├── controllers
+│   │   │   │   └── routes.ts
 │   │   │   ├── config
+│   │   │   │   └── ai-config.ts
 │   │   │   ├── demo.ts
 │   │   │   ├── index.ts
 │   │   │   ├── infrastructure
+│   │   │   │   └── db.ts
 │   │   │   ├── repositories
+│   │   │   │   ├── ChatMessageRepository.ts
+│   │   │   │   ├── LeadContextRepository.ts
+│   │   │   │   └── __tests__
+│   │   │   │       ├── ChatMessageRepository.test.ts
+│   │   │   │       └── LeadContextRepository.test.ts
 │   │   │   ├── server.ts
 │   │   │   └── services
+│   │   │       ├── ChatService.ts
+│   │   │       └── __tests__
+│   │   │           └── ChatService.test.ts
 │   │   └── tsconfig.json
 │   ├── frontend # React chat UI - customer interface (port 5173)
 │   │   ├── index.html
@@ -66,6 +84,8 @@ LeadManager/
 │   │   ├── src
 │   │   │   ├── App.tsx
 │   │   │   ├── components
+│   │   │   │   ├── ChatWindow.test.tsx
+│   │   │   │   └── ChatWindow.tsx
 │   │   │   ├── jest-dom.d.ts
 │   │   │   ├── main.tsx
 │   │   │   └── setupTests.ts
@@ -76,16 +96,30 @@ LeadManager/
 │   │   ├── .env
 │   │   ├── README.md
 │   │   ├── get-lead.ts
+│   │   ├── jest.config.cjs
 │   │   ├── knexfile.js
 │   │   ├── package.json
 │   │   ├── src
 │   │   │   ├── __tests__
+│   │   │   │   ├── database.test.ts
+│   │   │   │   ├── domain
+│   │   │   │   │   └── TouchPointSchedule.test.ts
+│   │   │   │   └── repositories
+│   │   │   │       ├── LeadRepository.test.ts
+│   │   │   │       └── TenantRepository.test.ts
 │   │   │   ├── analyze-services.ts
 │   │   │   ├── debug-service-sync.ts
 │   │   │   ├── domain
+│   │   │   │   └── TouchPointSchedule.ts
 │   │   │   ├── force-sync.ts
 │   │   │   ├── index.ts
 │   │   │   ├── infrastructure
+│   │   │   │   ├── crm
+│   │   │   │   ├── jobs
+│   │   │   │   ├── messaging
+│   │   │   │   ├── persistence
+│   │   │   │   ├── services
+│   │   │   │   └── webhooks
 │   │   │   ├── recategorize-services.ts
 │   │   │   ├── show-other-services.ts
 │   │   │   ├── test-service-sync.ts
@@ -97,7 +131,9 @@ LeadManager/
 │       ├── src
 │       │   ├── index.ts
 │       │   ├── types
+│       │   │   └── index.ts
 │       │   └── validation
+│       │       └── index.ts
 │       └── tsconfig.json
 ├── shopmonkey-response.json
 ├── tsconfig.json
@@ -130,7 +166,7 @@ LeadManager/
 
 ### Tests
 - `packages/orchestrator/src/__tests__/` - Orchestrator tests
-- `packages/chat/src/__tests__/` - Chat API tests (33 passing)
+- `packages/chat/src/__tests__/` - Chat API tests
 
 ---
 
@@ -162,4 +198,4 @@ LeadManager/
 
 ---
 
-**Last Updated:** 11/28/2025
+**Last Updated:** 11/29/2025

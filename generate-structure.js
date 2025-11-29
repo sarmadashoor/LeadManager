@@ -3,8 +3,15 @@ const fs = require('fs');
 const path = require('path');
 
 const ignore = [
-  'node_modules', '.git', 'dist', 'build', '.next',
-  'coverage', '.turbo', '.DS_Store', 'package-lock.json'
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '.next',
+  'coverage',
+  '.turbo',
+  '.DS_Store',
+  'package-lock.json'
 ];
 
 const descriptions = {
@@ -22,40 +29,55 @@ const descriptions = {
   'src/__tests__': 'Test files and utilities'
 };
 
-function tree(dir, prefix = '', level = 0, maxLevel = 3, output = []) {
+// Default depth for most of the tree
+const DEFAULT_MAX_LEVEL = 4;
+// Extra depth for tests (we want to see all test files)
+const TEST_MAX_LEVEL = 10;
+
+function tree(dir, prefix = '', level = 0, maxLevel = DEFAULT_MAX_LEVEL, output = []) {
   if (level > maxLevel) return output;
 
+  let items;
   try {
-    const items = fs.readdirSync(dir).filter(item => !ignore.includes(item));
-
-    items.forEach((item, index) => {
-      const fullPath = path.join(dir, item);
-      const isLast = index === items.length - 1;
-      const connector = isLast ? '└── ' : '├── ';
-      const relativePath = fullPath.replace(process.cwd() + '/', '');
-
-      let line = prefix + connector + item;
-
-      // Add description if available
-      if (descriptions[relativePath]) {
-        line += ` # ${descriptions[relativePath]}`;
-      }
-
-      output.push(line);
-
-      try {
-        const stat = fs.statSync(fullPath);
-        if (stat.isDirectory()) {
-          const newPrefix = prefix + (isLast ? '    ' : '│   ');
-          tree(fullPath, newPrefix, level + 1, maxLevel, output);
-        }
-      } catch (e) {
-        // ignore FS errors on individual paths
-      }
-    });
-  } catch (e) {
-    // ignore FS errors at root level
+    items = fs.readdirSync(dir).filter(item => !ignore.includes(item));
+  } catch {
+    return output;
   }
+
+  items.forEach((item, index) => {
+    const fullPath = path.join(dir, item);
+    const isLast = index === items.length - 1;
+    const connector = isLast ? '└── ' : '├── ';
+    const relativePath = fullPath.replace(process.cwd() + path.sep, '');
+
+    let line = prefix + connector + item;
+
+    // Add description if available
+    if (descriptions[relativePath]) {
+      line += ` # ${descriptions[relativePath]}`;
+    }
+
+    output.push(line);
+
+    let stat;
+    try {
+      stat = fs.statSync(fullPath);
+    } catch {
+      return;
+    }
+
+    if (stat.isDirectory()) {
+      const newPrefix = prefix + (isLast ? '    ' : '│   ');
+
+      // If this is a __tests__ directory (anywhere), allow deeper traversal
+      const isTestsDir =
+        item === '__tests__' || relativePath.includes(`${path.sep}__tests__`);
+
+      const nextMaxLevel = isTestsDir ? TEST_MAX_LEVEL : maxLevel;
+
+      tree(fullPath, newPrefix, level + 1, nextMaxLevel, output);
+    }
+  });
 
   return output;
 }
@@ -88,7 +110,7 @@ LeadManager/
 `;
 
 const output = [header];
-const treeLines = tree('.', '', 0, 3);
+const treeLines = tree('.');
 output.push(...treeLines);
 output.push('```' + '\n');
 
@@ -117,7 +139,7 @@ output.push(`
 
 ### Tests
 - \`packages/orchestrator/src/__tests__/\` - Orchestrator tests
-- \`packages/chat/src/__tests__/\` - Chat API tests (33 passing)
+- \`packages/chat/src/__tests__/\` - Chat API tests
 
 ---
 
@@ -154,6 +176,5 @@ output.push(`
 
 const content = output.join('\n');
 
-// 🔁 Write Markdown instead of .txt
 fs.writeFileSync('PROJECT_STRUCTURE.md', content);
 console.log('✅ Generated PROJECT_STRUCTURE.md');

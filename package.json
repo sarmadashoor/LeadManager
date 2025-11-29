@@ -17,7 +17,9 @@
     "migrate:rollback": "npm run migrate:rollback -w @lead-manager/orchestrator"
   },
   "devDependencies": {
-    "typescript": "^5.3.0",
-    "@types/node": "^20.10.0"
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.10.0",
+    "ts-jest": "^29.4.5",
+    "typescript": "^5.3.0"
   }
 }

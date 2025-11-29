@@ -1,20 +1,33 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { db } from '../../infrastructure/persistence/db';
-import { LeadRepository } from '../../infrastructure/persistence/repositories/LeadRepository';
+// @ts-nocheck
+const { db } = require('../../infrastructure/persistence/db');
+const {
+  LeadRepository,
+} = require('../../infrastructure/persistence/repositories/LeadRepository');
 
 describe('LeadRepository', () => {
   const repo = new LeadRepository();
-  let tenantId: string;
+  let tenantId;
+  let locationId;
 
   beforeAll(async () => {
     const [tenant] = await db('tenants')
       .insert({ slug: `test-lead-repo-${Date.now()}`, name: 'Test Tenant' })
       .returning('*');
     tenantId = tenant.id;
+
+    const [location] = await db('locations')
+      .insert({
+        tenant_id: tenantId,
+        name: 'Test Location',
+      })
+      .returning('*');
+
+    locationId = location.id;
   });
 
   afterAll(async () => {
     await db('leads').where({ tenant_id: tenantId }).delete();
+    await db('locations').where({ tenant_id: tenantId }).delete();
     await db('tenants').where({ id: tenantId }).delete();
     await db.destroy();
   });
@@ -29,7 +42,8 @@ describe('LeadRepository', () => {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-001',
         service_type: 'window-tinting',
-        customer_name: 'John Doe'
+        customer_name: 'John Doe',
+        location_id: locationId,
       });
 
       expect(lead.id).toBeDefined();
@@ -45,18 +59,27 @@ describe('LeadRepository', () => {
       await repo.create(tenantId, {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-002',
-        service_type: 'window-tinting'
+        service_type: 'window-tinting',
+        location_id: locationId,
       });
 
       // Create another tenant with a lead
       const [otherTenant] = await db('tenants')
         .insert({ slug: `other-tenant-${Date.now()}`, name: 'Other' })
         .returning('*');
-      
+
+      const [otherLocation] = await db('locations')
+        .insert({
+          tenant_id: otherTenant.id,
+          name: 'Other Location',
+        })
+        .returning('*');
+
       await repo.create(otherTenant.id, {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-003',
-        service_type: 'window-tinting'
+        service_type: 'window-tinting',
+        location_id: otherLocation.id,
       });
 
       // Query should only return our tenant's lead
@@ -66,6 +89,7 @@ describe('LeadRepository', () => {
 
       // Cleanup other tenant
       await db('leads').where({ tenant_id: otherTenant.id }).delete();
+      await db('locations').where({ tenant_id: otherTenant.id }).delete();
       await db('tenants').where({ id: otherTenant.id }).delete();
     });
   });
@@ -75,16 +99,25 @@ describe('LeadRepository', () => {
       await repo.create(tenantId, {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-FIND-001',
-        service_type: 'window-tinting'
+        service_type: 'window-tinting',
+        location_id: locationId,
       });
 
-      const found = await repo.findByWorkOrderId(tenantId, 'shopmonkey', 'WO-FIND-001');
+      const found = await repo.findByWorkOrderId(
+        tenantId,
+        'shopmonkey',
+        'WO-FIND-001',
+      );
       expect(found).not.toBeNull();
-      expect(found!.crm_work_order_id).toBe('WO-FIND-001');
+      expect(found.crm_work_order_id).toBe('WO-FIND-001');
     });
 
     it('should return null for non-existent work order', async () => {
-      const found = await repo.findByWorkOrderId(tenantId, 'shopmonkey', 'DOES-NOT-EXIST');
+      const found = await repo.findByWorkOrderId(
+        tenantId,
+        'shopmonkey',
+        'DOES-NOT-EXIST',
+      );
       expect(found).toBeNull();
     });
 
@@ -92,17 +125,31 @@ describe('LeadRepository', () => {
       await repo.create(tenantId, {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-TENANT-CHECK',
-        service_type: 'window-tinting'
+        service_type: 'window-tinting',
+        location_id: locationId,
       });
 
       const [otherTenant] = await db('tenants')
         .insert({ slug: `check-tenant-${Date.now()}`, name: 'Check' })
         .returning('*');
 
+      const [otherLocation] = await db('locations')
+        .insert({
+          tenant_id: otherTenant.id,
+          name: 'Check Location',
+        })
+        .returning('*');
+
       // Should not find it with different tenant
-      const found = await repo.findByWorkOrderId(otherTenant.id, 'shopmonkey', 'WO-TENANT-CHECK');
+      const found = await repo.findByWorkOrderId(
+        otherTenant.id,
+        'shopmonkey',
+        'WO-TENANT-CHECK',
+      );
       expect(found).toBeNull();
 
+      await db('leads').where({ tenant_id: otherTenant.id }).delete();
+      await db('locations').where({ tenant_id: otherTenant.id }).delete();
       await db('tenants').where({ id: otherTenant.id }).delete();
     });
   });
@@ -113,7 +160,8 @@ describe('LeadRepository', () => {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-UPSERT-001',
         service_type: 'window-tinting',
-        customer_name: 'Jane Doe'
+        customer_name: 'Jane Doe',
+        location_id: locationId,
       });
 
       expect(created).toBe(true);
@@ -126,7 +174,8 @@ describe('LeadRepository', () => {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-UPSERT-002',
         service_type: 'window-tinting',
-        customer_name: 'Original Name'
+        customer_name: 'Original Name',
+        location_id: locationId,
       });
 
       // Upsert with updated data
@@ -134,7 +183,8 @@ describe('LeadRepository', () => {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-UPSERT-002',
         service_type: 'window-tinting',
-        customer_name: 'Updated Name'
+        customer_name: 'Updated Name',
+        location_id: locationId,
       });
 
       expect(created).toBe(false);
@@ -148,28 +198,40 @@ describe('LeadRepository', () => {
       const lead = await repo.create(tenantId, {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-LOCK-001',
-        service_type: 'window-tinting'
+        service_type: 'window-tinting',
+        location_id: locationId,
       });
 
-      const updated = await repo.updateStatus(tenantId, lead.id, 'contacted', lead.version);
-      
+      const updated = await repo.updateStatus(
+        tenantId,
+        lead.id,
+        'contacted',
+        lead.version,
+      );
+
       expect(updated).not.toBeNull();
-      expect(updated!.status).toBe('contacted');
-      expect(updated!.version).toBe(2);
+      expect(updated.status).toBe('contacted');
+      expect(updated.version).toBe(2);
     });
 
     it('should fail update when version mismatch (race condition)', async () => {
       const lead = await repo.create(tenantId, {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-LOCK-002',
-        service_type: 'window-tinting'
+        service_type: 'window-tinting',
+        location_id: locationId,
       });
 
       // Simulate another process updating first
       await db('leads').where({ id: lead.id }).update({ version: 5 });
 
       // Our update should fail due to version mismatch
-      const updated = await repo.updateStatus(tenantId, lead.id, 'contacted', lead.version);
+      const updated = await repo.updateStatus(
+        tenantId,
+        lead.id,
+        'contacted',
+        lead.version,
+      );
       expect(updated).toBeNull();
     });
   });
@@ -180,14 +242,16 @@ describe('LeadRepository', () => {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-STATUS-001',
         service_type: 'window-tinting',
-        status: 'new'
+        status: 'new',
+        location_id: locationId,
       });
 
       await repo.create(tenantId, {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-STATUS-002',
         service_type: 'window-tinting',
-        status: 'contacted'
+        status: 'contacted',
+        location_id: locationId,
       });
 
       const newLeads = await repo.findByStatus(tenantId, 'new');
@@ -201,13 +265,14 @@ describe('LeadRepository', () => {
       const lead = await repo.create(tenantId, {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-INVITE-001',
-        service_type: 'window-tinting'
+        service_type: 'window-tinting',
+        location_id: locationId,
       });
 
       const updated = await repo.markInvitationSent(tenantId, lead.id);
 
-      expect(updated!.status).toBe('contacted');
-      expect(updated!.invitation_sent_at).not.toBeNull();
+      expect(updated.status).toBe('contacted');
+      expect(updated.invitation_sent_at).not.toBeNull();
     });
   });
 
@@ -220,7 +285,8 @@ describe('LeadRepository', () => {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-DUE-001',
         service_type: 'window-tinting',
-        status: 'new'
+        status: 'new',
+        location_id: locationId,
       });
 
       await repo.scheduleNextTouchPoint(tenantId, lead.id, pastDate);
@@ -236,7 +302,8 @@ describe('LeadRepository', () => {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-FUTURE-001',
         service_type: 'window-tinting',
-        status: 'new'
+        status: 'new',
+        location_id: locationId,
       });
 
       await repo.scheduleNextTouchPoint(tenantId, lead.id, futureDate);
@@ -251,14 +318,17 @@ describe('LeadRepository', () => {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-MAXED-001',
         service_type: 'window-tinting',
-        status: 'contacted'
+        status: 'contacted',
+        location_id: locationId,
       });
 
       // Manually set touch_point_count to 13
-      await db('leads').where({ id: lead.id }).update({ 
-        touch_point_count: 13,
-        next_touch_point_at: pastDate
-      });
+      await db('leads')
+        .where({ id: lead.id })
+        .update({
+          touch_point_count: 13,
+          next_touch_point_at: pastDate,
+        });
 
       const dueLeads = await repo.findDueForTouchPoint(tenantId);
       expect(dueLeads.length).toBe(0);
@@ -266,13 +336,14 @@ describe('LeadRepository', () => {
 
     it('should only find leads with eligible statuses', async () => {
       const pastDate = new Date(Date.now() - 60000);
-      
+
       // Create lead with 'lost' status (not eligible)
       const lostLead = await repo.create(tenantId, {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-LOST-001',
         service_type: 'window-tinting',
-        status: 'lost'
+        status: 'lost',
+        location_id: locationId,
       });
       await repo.scheduleNextTouchPoint(tenantId, lostLead.id, pastDate);
 
@@ -281,7 +352,8 @@ describe('LeadRepository', () => {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-NEW-001',
         service_type: 'window-tinting',
-        status: 'new'
+        status: 'new',
+        location_id: locationId,
       });
       await repo.scheduleNextTouchPoint(tenantId, newLead.id, pastDate);
 
@@ -296,30 +368,36 @@ describe('LeadRepository', () => {
       const lead = await repo.create(tenantId, {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-TOUCH-001',
-        service_type: 'window-tinting'
+        service_type: 'window-tinting',
+        location_id: locationId,
       });
 
       expect(lead.touch_point_count).toBe(0);
 
       const nextTime = new Date(Date.now() + 86400000); // Tomorrow
-      const updated = await repo.recordTouchPoint(tenantId, lead.id, nextTime);
+      const updated = await repo.recordTouchPoint(
+        tenantId,
+        lead.id,
+        nextTime,
+      );
 
-      expect(updated!.touch_point_count).toBe(1);
-      expect(updated!.last_contacted_at).not.toBeNull();
-      expect(updated!.next_touch_point_at).not.toBeNull();
+      expect(updated.touch_point_count).toBe(1);
+      expect(updated.last_contacted_at).not.toBeNull();
+      expect(updated.next_touch_point_at).not.toBeNull();
     });
 
     it('should set next_touch_point_at to null when no more touch points', async () => {
       const lead = await repo.create(tenantId, {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-TOUCH-002',
-        service_type: 'window-tinting'
+        service_type: 'window-tinting',
+        location_id: locationId,
       });
 
       const updated = await repo.recordTouchPoint(tenantId, lead.id, null);
 
-      expect(updated!.touch_point_count).toBe(1);
-      expect(updated!.next_touch_point_at).toBeNull();
+      expect(updated.touch_point_count).toBe(1);
+      expect(updated.next_touch_point_at).toBeNull();
     });
   });
 
@@ -329,14 +407,15 @@ describe('LeadRepository', () => {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-LOST-TEST-001',
         service_type: 'window-tinting',
-        status: 'contacted'
+        status: 'contacted',
+        location_id: locationId,
       });
 
       await repo.scheduleNextTouchPoint(tenantId, lead.id, new Date());
       const updated = await repo.markAsLost(tenantId, lead.id);
 
-      expect(updated!.status).toBe('lost');
-      expect(updated!.next_touch_point_at).toBeNull();
+      expect(updated.status).toBe('lost');
+      expect(updated.next_touch_point_at).toBeNull();
     });
   });
 
@@ -346,15 +425,16 @@ describe('LeadRepository', () => {
         crm_source: 'shopmonkey',
         crm_work_order_id: 'WO-RESPOND-001',
         service_type: 'window-tinting',
-        status: 'contacted'
+        status: 'contacted',
+        location_id: locationId,
       });
 
       await repo.scheduleNextTouchPoint(tenantId, lead.id, new Date());
       const updated = await repo.markAsResponded(tenantId, lead.id);
 
-      expect(updated!.status).toBe('chat_active');
-      expect(updated!.first_response_at).not.toBeNull();
-      expect(updated!.next_touch_point_at).toBeNull();
+      expect(updated.status).toBe('chat_active');
+      expect(updated.first_response_at).not.toBeNull();
+      expect(updated.next_touch_point_at).toBeNull();
     });
   });
 });

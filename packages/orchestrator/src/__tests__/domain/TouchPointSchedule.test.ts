@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import {
+// @ts-nocheck
+const {
   calculateNextTouchPointTime,
   getDaysForTouchPoint,
   shouldMarkAsLost,
   getFullSchedule,
   MAX_TOUCH_POINTS
-} from '../../domain/TouchPointSchedule';
+} = require('../../domain/TouchPointSchedule');
 
 describe('TouchPointSchedule', () => {
   describe('calculateNextTouchPointTime', () => {
@@ -15,31 +15,46 @@ describe('TouchPointSchedule', () => {
       const result = calculateNextTouchPointTime(baseDate, 0);
       expect(result).not.toBeNull();
       // Touch point 1 is day 0, so should be same day or now
-      expect(result!.getTime()).toBeGreaterThanOrEqual(baseDate.getTime());
+      if (!result) {
+        throw new Error('Expected next touch point time to be defined');
+      }
+      expect(result.getTime()).toBeGreaterThanOrEqual(baseDate.getTime());
     });
 
     it('should schedule touch point 2 on day 1', () => {
       const result = calculateNextTouchPointTime(baseDate, 1);
       expect(result).not.toBeNull();
+      if (!result) {
+        throw new Error('Expected next touch point time to be defined');
+      }
+
       const expectedDate = new Date(baseDate);
       expectedDate.setDate(expectedDate.getDate() + 1);
-      expect(result!.toDateString()).toBe(expectedDate.toDateString());
+      expect(result.toDateString()).toBe(expectedDate.toDateString());
     });
 
     it('should schedule touch point 3 on day 3', () => {
       const result = calculateNextTouchPointTime(baseDate, 2);
       expect(result).not.toBeNull();
+      if (!result) {
+        throw new Error('Expected next touch point time to be defined');
+      }
+
       const expectedDate = new Date(baseDate);
       expectedDate.setDate(expectedDate.getDate() + 3);
-      expect(result!.toDateString()).toBe(expectedDate.toDateString());
+      expect(result.toDateString()).toBe(expectedDate.toDateString());
     });
 
     it('should schedule touch point 13 on day 30', () => {
       const result = calculateNextTouchPointTime(baseDate, 12);
       expect(result).not.toBeNull();
+      if (!result) {
+        throw new Error('Expected next touch point time to be defined');
+      }
+
       const expectedDate = new Date(baseDate);
       expectedDate.setDate(expectedDate.getDate() + 30);
-      expect(result!.toDateString()).toBe(expectedDate.toDateString());
+      expect(result.toDateString()).toBe(expectedDate.toDateString());
     });
 
     it('should return null after all 13 touch points', () => {
@@ -51,9 +66,13 @@ describe('TouchPointSchedule', () => {
       const oldLead = new Date('2020-01-01T10:00:00Z');
       const result = calculateNextTouchPointTime(oldLead, 0);
       const now = new Date();
+
       // Should be approximately now (within a few seconds)
       expect(result).not.toBeNull();
-      expect(Math.abs(result!.getTime() - now.getTime())).toBeLessThan(5000);
+      if (!result) {
+        throw new Error('Expected next touch point time to be defined');
+      }
+      expect(Math.abs(result.getTime() - now.getTime())).toBeLessThan(5000);
     });
   });
 
