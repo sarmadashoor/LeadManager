@@ -1,0 +1,1307 @@
+==============================
+ FRONTEND DIRECTORY TREE
+==============================
+
+├── dump-frontend.cjs
+├── index.html
+├── jest.config.cjs
+├── node_modules
+├── package.json
+├── src
+│   ├── App.tsx
+│   ├── api
+│   │   ├── chat.ts
+│   │   ├── client.ts
+│   │   └── streaming.ts
+│   ├── components
+│   │   ├── ChatWindow.test.tsx
+│   │   └── ChatWindow.tsx
+│   ├── jest-dom.d.ts
+│   ├── main.tsx
+│   ├── setupTests.ts
+│   └── vite-env.d.ts
+├── tsconfig.json
+├── tsconfig.node.json
+└── vite.config.ts
+
+
+==============================
+ FILE CONTENTS
+==============================
+
+
+----------------------------------------------
+FILE: dump-frontend.cjs
+----------------------------------------------
+
+#!/usr/bin/env node
+
+/**
+ * dump-frontend.js
+ *
+ * Produces a full text dump of:
+ *  - directory tree (recursive)
+ *  - contents of all major source files
+ *
+ * Output is saved to: frontend_dump.txt
+ *
+ * Useful for LLM analysis.
+ */
+
+const fs = require("fs");
+const path = require("path");
+
+const OUTPUT_FILE = "frontend_dump.txt";
+const ROOT = process.cwd();
+
+const IGNORE_DIRS = new Set([
+  "node_modules",
+  "dist",
+  "build",
+  ".git",
+  ".idea",
+  ".vscode",
+  ".turbo",
+  "coverage",
+]);
+
+const IGNORE_EXT = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".svg",
+  ".ico",
+  ".map",
+  ".lock",
+  ".woff",
+  ".woff2",
+  ".ttf",
+]);
+
+// ----------------------------------------------
+// Step 1: Build directory tree
+// ----------------------------------------------
+function buildTree(dir, prefix = "") {
+  const items = fs.readdirSync(dir).filter(f => !f.startsWith(".DS_Store"));
+  let output = "";
+
+  items.forEach((item, idx) => {
+    const fullPath = path.join(dir, item);
+    const isLast = idx === items.length - 1;
+    const connector = isLast ? "└── " : "├── ";
+
+    output += `${prefix}${connector}${item}\n`;
+
+    if (fs.statSync(fullPath).isDirectory()) {
+      if (!IGNORE_DIRS.has(item)) {
+        const newPrefix = prefix + (isLast ? "    " : "│   ");
+        output += buildTree(fullPath, newPrefix);
+      }
+    }
+  });
+
+  return output;
+}
+
+// ----------------------------------------------
+// Step 2: Gather file contents
+// ----------------------------------------------
+function collectFiles(dir) {
+  let results = [];
+
+  const items = fs.readdirSync(dir);
+
+  for (const item of items) {
+    if (IGNORE_DIRS.has(item)) continue;
+
+    const fullPath = path.join(dir, item);
+    const stat = fs.statSync(fullPath);
+
+    if (stat.isDirectory()) {
+      results = results.concat(collectFiles(fullPath));
+    } else {
+      const ext = path.extname(item);
+      if (!IGNORE_EXT.has(ext)) {
+        results.push(fullPath);
+      }
+    }
+  }
+
+  return results;
+}
+
+// ----------------------------------------------
+// Step 3: Generate output file
+// ----------------------------------------------
+let output = "";
+
+// HEADER
+output += "==============================\n";
+output += " FRONTEND DIRECTORY TREE\n";
+output += "==============================\n\n";
+output += buildTree(ROOT);
+
+// CONTENTS
+output += "\n\n==============================\n";
+output += " FILE CONTENTS\n";
+output += "==============================\n\n";
+
+const files = collectFiles(ROOT);
+
+for (const f of files) {
+  output += `\n----------------------------------------------\n`;
+  output += `FILE: ${path.relative(ROOT, f)}\n`;
+  output += `----------------------------------------------\n\n`;
+
+  try {
+    const contents = fs.readFileSync(f, "utf8");
+    output += contents + "\n";
+  } catch (err) {
+    output += `(Error reading file)\n`;
+  }
+}
+
+// WRITE TO FILE
+fs.writeFileSync(OUTPUT_FILE, output);
+
+console.log(`✅ Frontend dump created: ${OUTPUT_FILE}`);
+
+
+----------------------------------------------
+FILE: index.html
+----------------------------------------------
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lead Manager Chat</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
+
+----------------------------------------------
+FILE: jest.config.cjs
+----------------------------------------------
+
+/** @type {import('jest').Config} */
+module.exports = {
+  preset: "ts-jest",
+  testEnvironment: "jsdom",
+  roots: ["<rootDir>/src"],
+  moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json"],
+  setupFilesAfterEnv: ["<rootDir>/src/setupTests.ts"],
+  transform: {
+    "^.+\\.(ts|tsx)$": "ts-jest",
+  },
+};
+
+
+----------------------------------------------
+FILE: package.json
+----------------------------------------------
+
+{
+  "name": "@lead-manager/frontend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^7.9.6"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/jest": "^29.5.14",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "jsdom": "^27.2.0",
+    "ts-jest": "^29.4.5",
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0"
+  }
+}
+
+
+----------------------------------------------
+FILE: src/App.tsx
+----------------------------------------------
+
+import React from "react";
+import { Routes, Route } from "react-router-dom";
+import ChatWindow from "./components/ChatWindow";
+
+const App: React.FC = () => {
+  return (
+    <Routes>
+      <Route path="/c/:leadId" element={<ChatWindow />} />
+    </Routes>
+  );
+};
+
+export default App;
+
+
+----------------------------------------------
+FILE: src/api/chat.ts
+----------------------------------------------
+
+import { apiGet } from "./client";
+
+export type LeadContext = {
+  leadId: string;
+  customerName?: string;
+  vehicle?: {
+    year?: string;
+    make?: string;
+    model?: string;
+  };
+  services?: string[];
+  status?: string;
+};
+
+export async function fetchLeadContext(leadId: string) {
+  return apiGet<LeadContext>(`/api/chat/${encodeURIComponent(leadId)}/context`);
+}
+
+export type ChatHistoryItem = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt?: string;
+};
+
+export async function fetchChatHistory(
+  leadId: string
+): Promise<ChatHistoryItem[]> {
+  return apiGet<ChatHistoryItem[]>(
+    `/api/chat/${encodeURIComponent(leadId)}/history`
+  );
+}
+
+
+----------------------------------------------
+FILE: src/api/client.ts
+----------------------------------------------
+
+const BASE_URL = import.meta.env.VITE_CHAT_API || "http://localhost:3001";
+
+/**
+ * Generic GET helper
+ */
+export async function apiGet<T = any>(path: string): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `GET ${path} failed`);
+  }
+
+  return res.json() as Promise<T>;
+}
+
+/**
+ * Generic POST helper
+ */
+export async function apiPost<T = any>(path: string, body: any): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `POST ${path} failed`);
+  }
+
+  return res.json() as Promise<T>;
+}
+
+
+----------------------------------------------
+FILE: src/api/streaming.ts
+----------------------------------------------
+
+// src/api/streaming.ts
+
+export type StreamingCallbacks = {
+  onChunk: (text: string) => void;
+  onDone: () => void;
+  onError: (error: unknown) => void;
+};
+
+/**
+ * Runtime feature flag for streaming.
+ * We'll wire this to an env var later (e.g. VITE_CHAT_STREAMING).
+ * Default: false. Tests will override via jest.spyOn.
+ */
+export function isStreamingEnabled(): boolean {
+  return false;
+}
+
+/**
+ * Start a streaming chat request.
+ *
+ * For now this is a safe no-op implementation so tests can spy on it
+ * without the real network logic existing yet.
+ *
+ * It returns a cleanup function that would close the stream (EventSource,
+ * fetch reader, etc.) once we implement real streaming.
+ */
+export function sendStreamingMessage(
+  _leadId: string,
+  _message: string,
+  callbacks: StreamingCallbacks
+): () => void {
+  // Default behavior: immediately signal completion so callers don't hang.
+  try {
+    callbacks.onDone();
+  } catch {
+    // ignore
+  }
+
+  // Cleanup function – currently a no-op.
+  return () => {
+    // no-op for now
+  };
+}
+
+
+----------------------------------------------
+FILE: src/components/ChatWindow.test.tsx
+----------------------------------------------
+
+import "@testing-library/jest-dom";
+import * as streamingModule from "../api/streaming";
+import { describe, it, expect, beforeEach, jest } from "@jest/globals";
+import {
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter, Routes, Route } from "react-router-dom";
+
+
+import ChatWindow from "./ChatWindow";
+
+// ---- Mock API modules used by ChatWindow ----
+jest.mock("../api/chat", () => ({
+  fetchLeadContext: jest.fn(),
+  fetchChatHistory: jest.fn(),
+}));
+
+jest.mock("../api/client", () => ({
+  apiPost: jest.fn(),
+}));
+
+import { fetchLeadContext, fetchChatHistory } from "../api/chat";
+import { apiPost } from "../api/client";
+
+// Cast to jest.Mock-ish types; we’ll still cast as any at call sites
+const mockFetchLeadContext = fetchLeadContext as unknown as jest.Mock;
+const mockFetchChatHistory = fetchChatHistory as unknown as jest.Mock;
+const mockApiPost = apiPost as unknown as jest.Mock;
+
+// Mock scrollIntoView for auto-scroll tests
+Object.defineProperty(global.HTMLElement.prototype, "scrollIntoView", {
+  value: jest.fn(),
+  writable: true,
+});
+
+function renderWithRoute(
+  leadId = "c66a99bd-956b-46f0-a52b-a99ad738412e"
+) {
+  return render(
+    <MemoryRouter initialEntries={[`/c/${leadId}`]}>
+      <Routes>
+        <Route path="/c/:leadId" element={<ChatWindow />} />
+      </Routes>
+    </MemoryRouter>
+  );
+}
+
+describe("ChatWindow (with context + history)", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("shows the lead id and vehicle context in the header when context loads", async () => {
+    (mockFetchLeadContext as any).mockResolvedValue({
+      leadId: "c66a99bd-956b-46f0-a52b-a99ad738412e",
+      vehicle: { year: "2020", make: "Honda", model: "Civic" },
+      services: ["Window Tint"],
+    });
+    (mockFetchChatHistory as any).mockResolvedValue([]);
+
+    renderWithRoute();
+
+    // Static header
+    const headerTitle = screen.getByText("Tint Chat Assistant");
+    (expect(headerTitle) as any).toBeInTheDocument();
+
+    // Context should show once loaded
+    await waitFor(() => {
+      // Match the whole context block by partial text, ignoring whitespace / <br/>
+      const contextBlock = screen.getByText((content) =>
+        content.includes("2020") &&
+        content.includes("Honda") &&
+        content.includes("Civic") &&
+        content.includes("Window Tint") &&
+        content.includes("Lead:") &&
+        content.includes("c66a99bd-956b-46f0-a52b-a99ad738412e")
+      );
+
+      (expect(contextBlock) as any).toBeInTheDocument();
+    });
+  });
+
+  it("loads and renders chat history in chronological order (createdAt ascending)", async () => {
+    (mockFetchLeadContext as any).mockResolvedValue({});
+    (mockFetchChatHistory as any).mockResolvedValue([
+      {
+        id: "2",
+        role: "assistant",
+        content: "Second message",
+        createdAt: "2023-01-02T10:00:00Z",
+      },
+      {
+        id: "1",
+        role: "user",
+        content: "First message",
+        createdAt: "2023-01-01T10:00:00Z",
+      },
+    ]);
+
+    renderWithRoute();
+
+    await waitFor(() => {
+      const items = screen.getAllByText(/message/i);
+      (expect(items[0]) as any).toHaveTextContent("First message");
+      (expect(items[1]) as any).toHaveTextContent("Second message");
+    });
+  });
+
+  it("triggers auto-scroll when messages are loaded", async () => {
+    (mockFetchLeadContext as any).mockResolvedValue({});
+    (mockFetchChatHistory as any).mockResolvedValue([
+      { id: "m1", role: "user", content: "Hello from history" },
+    ]);
+
+    renderWithRoute();
+
+    await waitFor(() => {
+      (expect(
+        (global.HTMLElement.prototype.scrollIntoView as jest.Mock)
+      ) as any).toHaveBeenCalled();
+    });
+  });
+
+  it("shows the empty-state hint when history is empty", async () => {
+    (mockFetchLeadContext as any).mockResolvedValue({});
+    (mockFetchChatHistory as any).mockResolvedValue([]);
+
+    renderWithRoute();
+
+    await waitFor(() => {
+      const emptyState = screen.getByText(
+        /Ask anything about pricing, tint options, or booking an appointment./i
+      );
+      (expect(emptyState) as any).toBeInTheDocument();
+    });
+  });
+
+  it("shows a clear error when chat history fails to load", async () => {
+    (mockFetchLeadContext as any).mockResolvedValue({});
+    (mockFetchChatHistory as any).mockRejectedValue(
+      new Error("Network failure")
+    );
+
+    renderWithRoute();
+
+    await waitFor(() => {
+      const errorNode = screen.getByText("Unable to load chat history.");
+      (expect(errorNode) as any).toBeInTheDocument();
+    });
+  });
+
+  it("send flow: user message is sent and apiPost is called with correct URL and payload", async () => {
+    (mockFetchLeadContext as any).mockResolvedValue({});
+    (mockFetchChatHistory as any).mockResolvedValue([]);
+    (mockApiPost as any).mockResolvedValue({
+      data: { content: "Mock assistant reply", provider: "claude" },
+    });
+
+    renderWithRoute();
+
+    const input = screen.getByPlaceholderText("Type a message…");
+    const button = screen.getByRole("button", { name: /send/i });
+
+    await userEvent.type(input, "Hello from test");
+    await userEvent.click(button);
+
+    await waitFor(() => {
+      (expect(mockApiPost) as any).toHaveBeenCalledTimes(1);
+    });
+
+    (expect(mockApiPost) as any).toHaveBeenCalledWith(
+      "/api/chat/c66a99bd-956b-46f0-a52b-a99ad738412e/message",
+      { message: "Hello from test" }
+    );
+
+    // Both user + assistant messages appear
+    await waitFor(() => {
+      const userMsg = screen.getByText("Hello from test");
+      const aiMsg = screen.getByText("Mock assistant reply");
+      (expect(userMsg) as any).toBeInTheDocument();
+      (expect(aiMsg) as any).toBeInTheDocument();
+    });
+  });
+
+  it("shows typing indicator while message is sending", async () => {
+    (mockFetchLeadContext as any).mockResolvedValue({});
+    (mockFetchChatHistory as any).mockResolvedValue([]);
+
+    let resolvePost: ((value: any) => void) | null = null;
+    (mockApiPost as any).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvePost = resolve;
+        })
+    );
+
+    renderWithRoute();
+
+    const input = screen.getByPlaceholderText("Type a message…");
+    const button = screen.getByRole("button", { name: /send/i });
+
+    await userEvent.type(input, "Hello typing");
+    await userEvent.click(button);
+
+    // While the promise is pending, typing indicator should be visible
+    const typingNode = screen.getByText(/Assistant is typing…/i);
+    (expect(typingNode) as any).toBeInTheDocument();
+
+
+    // Now resolve the POST and ensure typing indicator disappears
+    if (resolvePost) {
+      resolvePost({
+        data: { content: "Done", provider: "claude" },
+      });
+    }
+
+    await waitFor(() => {
+      (expect(
+        screen.queryByText(/Tint Assistant is typing…/i)
+      ) as any).toBeNull();
+      const reply = screen.getByText("Done");
+      (expect(reply) as any).toBeInTheDocument();
+    });
+  });
+
+  it("shows an error banner and hides typing indicator when send fails", async () => {
+    (mockFetchLeadContext as any).mockResolvedValue({});
+    (mockFetchChatHistory as any).mockResolvedValue([]);
+    (mockApiPost as any).mockRejectedValue(new Error("Boom"));
+
+    renderWithRoute();
+
+    const input = screen.getByPlaceholderText("Type a message…");
+    const button = screen.getByRole("button", { name: /send/i });
+
+    await userEvent.type(input, "Hello error");
+    await userEvent.click(button);
+
+    await waitFor(() => {
+      const errorNode = screen.getByText(
+        "We couldn't send your message. Please try again."
+      );
+      (expect(errorNode) as any).toBeInTheDocument();
+    });
+
+    (expect(
+      screen.queryByText(/Tint Assistant is typing…/i)
+    ) as any).toBeNull();
+  });
+});
+describe("ChatWindow streaming mode (SSE)", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
+  });
+
+  it("uses streaming API and progressively renders assistant reply when streaming is enabled", async () => {
+    (mockFetchLeadContext as any).mockResolvedValue({});
+    (mockFetchChatHistory as any).mockResolvedValue([]);
+
+    const sendSpy = jest.spyOn(streamingModule, "sendStreamingMessage");
+    jest
+      .spyOn(streamingModule, "isStreamingEnabled")
+      .mockReturnValue(true);
+
+    renderWithRoute();
+
+    const input = screen.getByPlaceholderText("Type a message…");
+    const button = screen.getByRole("button", { name: /send/i });
+
+    await userEvent.type(input, "Stream this");
+    await userEvent.click(button);
+
+    // ChatWindow should call sendStreamingMessage instead of apiPost
+    await waitFor(() => {
+      (expect(sendSpy) as any).toHaveBeenCalledTimes(1);
+    });
+    (expect(mockApiPost) as any).not.toHaveBeenCalled();
+
+    // Grab callbacks passed into sendStreamingMessage
+    const [, , callbacks] = sendSpy.mock.calls[0] as [
+      string,
+      string,
+      { onChunk: (t: string) => void; onDone: () => void; onError: (e: unknown) => void }
+    ];
+
+    // Simulate partial chunks coming from SSE
+    callbacks.onChunk("Hello ");
+    callbacks.onChunk("world");
+    callbacks.onDone();
+
+    // Assistant message should show combined chunks
+    await waitFor(() => {
+      const aiMsg = screen.getByText("Hello world");
+      (expect(aiMsg) as any).toBeInTheDocument();
+    });
+  });
+
+  it("closes the stream when the component unmounts", async () => {
+    (mockFetchLeadContext as any).mockResolvedValue({});
+    (mockFetchChatHistory as any).mockResolvedValue([]);
+
+    const cancelFn = jest.fn();
+    const sendSpy = jest
+      .spyOn(streamingModule, "sendStreamingMessage")
+      .mockImplementation(
+        (
+          _leadId: string,
+          _message: string,
+          _callbacks: {
+            onChunk: (t: string) => void;
+            onDone: () => void;
+            onError: (e: unknown) => void;
+          }
+        ) => {
+          // We don't need to simulate chunks here; just return a cancel function
+          return cancelFn;
+        }
+      );
+
+    jest
+      .spyOn(streamingModule, "isStreamingEnabled")
+      .mockReturnValue(true);
+
+    const { unmount } = renderWithRoute();
+
+    const input = screen.getByPlaceholderText("Type a message…");
+    const button = screen.getByRole("button", { name: /send/i });
+
+    await userEvent.type(input, "Stream cleanup");
+    await userEvent.click(button);
+
+    await waitFor(() => {
+      (expect(sendSpy) as any).toHaveBeenCalledTimes(1);
+    });
+
+    // When the component unmounts, it should call the cleanup function
+    unmount();
+    (expect(cancelFn) as any).toHaveBeenCalled();
+  });
+});
+
+
+----------------------------------------------
+FILE: src/components/ChatWindow.tsx
+----------------------------------------------
+
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { useParams } from "react-router-dom";
+
+import { apiPost } from "../api/client";
+import { fetchLeadContext, fetchChatHistory } from "../api/chat";
+import {
+  isStreamingEnabled,
+  sendStreamingMessage,
+} from "../api/streaming";
+
+type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt?: string;
+};
+
+type LeadContext = {
+  leadId: string;
+  vehicle?: {
+    year?: string;
+    make?: string;
+    model?: string;
+  };
+  services?: string[];
+} | null;
+
+const ChatWindow: React.FC = () => {
+  const { leadId } = useParams<{ leadId: string }>();
+
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [headerContext, setHeaderContext] = useState<LeadContext>(null);
+
+  // Auto-scroll reference
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Holds the active streaming-cancel function (if streaming is in progress)
+  const streamCancelRef = useRef<(() => void) | null>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Scroll every time messages update
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Load context + history on mount / when leadId changes
+  useEffect(() => {
+    if (!leadId) {
+      setError("Invalid chat link: missing leadId in URL.");
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadContextAndHistory = async () => {
+      setIsLoadingHistory(true);
+      setError(null);
+
+      try {
+        const [ctx, history] = await Promise.all([
+          fetchLeadContext(leadId),
+          fetchChatHistory(leadId),
+        ]);
+
+        if (cancelled) return;
+
+        if (ctx) {
+          setHeaderContext(ctx as LeadContext);
+        }
+
+        if (Array.isArray(history)) {
+          const sorted = [...history].sort((a, b) => {
+            const at = a.createdAt
+              ? new Date(a.createdAt).getTime()
+              : 0;
+            const bt = b.createdAt
+              ? new Date(b.createdAt).getTime()
+              : 0;
+            return at - bt;
+          });
+          setMessages(sorted);
+        }
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) {
+          setError("Unable to load chat history.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingHistory(false);
+        }
+      }
+    };
+
+    loadContextAndHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [leadId]);
+
+  // Cleanup any active stream on unmount
+  useEffect(() => {
+    return () => {
+      if (streamCancelRef.current) {
+        streamCancelRef.current();
+        streamCancelRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleSend = useCallback(
+    async (event: React.FormEvent) => {
+      event.preventDefault();
+
+      if (!leadId) {
+        setError("Lead ID missing.");
+        return;
+      }
+
+      const trimmed = input.trim();
+      if (!trimmed) return;
+
+      const userMessage: ChatMessage = {
+        id: `user-${Date.now()}`,
+        role: "user",
+        content: trimmed,
+      };
+
+      // Append user message immediately
+      setMessages((prev) => [...prev, userMessage]);
+      setInput("");
+      setIsSending(true);
+      setError(null);
+
+      // STREAMING MODE
+      if (isStreamingEnabled()) {
+        // Cancel any previous stream
+        if (streamCancelRef.current) {
+          streamCancelRef.current();
+          streamCancelRef.current = null;
+        }
+
+        const assistantId = `assistant-${Date.now()}`;
+
+        // Start with an empty assistant bubble
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: assistantId,
+            role: "assistant",
+            content: "",
+          },
+        ]);
+
+        const cancel = sendStreamingMessage(leadId, trimmed, {
+          onChunk: (chunk: string) => {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId
+                  ? { ...m, content: (m.content ?? "") + chunk }
+                  : m
+              )
+            );
+          },
+          onDone: () => {
+            setIsSending(false);
+          },
+          onError: (err: unknown) => {
+            console.error(err);
+            setError(
+              "We couldn't send your message. Please try again."
+            );
+            setIsSending(false);
+          },
+        });
+
+        streamCancelRef.current = cancel;
+        return;
+      }
+
+      // FALLBACK: non-streaming POST
+      try {
+        const data = await apiPost(
+          `/api/chat/${encodeURIComponent(leadId)}/message`,
+          { message: userMessage.content }
+        );
+
+        const assistantContent: string =
+          data?.data?.content ??
+          (typeof data.response === "string"
+            ? data.response
+            : JSON.stringify(data));
+
+        const assistantMessage: ChatMessage = {
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+          content: assistantContent,
+        };
+
+        setMessages((prev) => [...prev, assistantMessage]);
+      } catch (err) {
+        console.error(err);
+        setError(
+          "We couldn't send your message. Please try again."
+        );
+      } finally {
+        setIsSending(false);
+      }
+    },
+    [leadId, input]
+  );
+
+  if (!leadId) {
+    return (
+      <div style={{ padding: "1rem", fontFamily: "system-ui" }}>
+        <h1>Lead Chat</h1>
+        <p style={{ color: "red" }}>{error}</p>
+      </div>
+    );
+  }
+
+  // Build header context line from loaded context
+  const vehicle = headerContext?.vehicle;
+  const services = headerContext?.services ?? [];
+  const hasVehicle =
+    vehicle &&
+    (vehicle.year || vehicle.make || vehicle.model);
+
+  const vehicleLine = hasVehicle
+    ? `${vehicle.year ?? ""} ${vehicle.make ?? ""} ${
+        vehicle.model ?? ""
+      }`.trim()
+    : null;
+
+  const servicesLine =
+    services.length > 0 ? ` • ${services.join(", ")}` : "";
+
+  const headerLine =
+    vehicleLine || servicesLine
+      ? `${vehicleLine ?? ""}${servicesLine}`
+      : "Ask anything about your vehicle or booking.";
+
+  return (
+    <div
+      style={{
+        height: "100vh",
+        width: "100%",
+        display: "flex",
+        justifyContent: "center",
+        fontFamily: "system-ui",
+        background: "#f5f5f5",
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "600px",
+          height: "100vh",
+          background: "#ffffff",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
+        <header
+          style={{
+            padding: "0.75rem 1rem",
+            borderBottom: "1px solid #eee",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            background: "#111827",
+            color: "#f9fafb",
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: "0.9rem",
+                fontWeight: 600,
+              }}
+            >
+              Tint Chat Assistant
+            </div>
+            <div
+              style={{
+                fontSize: "0.75rem",
+                opacity: 0.8,
+              }}
+            >
+              {headerLine}
+              <br />
+              Lead: {leadId}
+            </div>
+          </div>
+          <div style={{ fontSize: "0.75rem" }}>
+            {isSending ? "Thinking…" : "Online"}
+          </div>
+        </header>
+
+        <div
+          style={{
+            flex: 1,
+            padding: "1rem",
+            overflowY: "auto",
+            background: "#f9fafb",
+          }}
+        >
+          {messages.length === 0 && !isLoadingHistory && (
+            <div
+              style={{
+                fontSize: "0.85rem",
+                color: "#6b7280",
+                textAlign: "center",
+                marginTop: "1rem",
+              }}
+            >
+              Ask anything about pricing, tint options, or booking an
+              appointment.
+            </div>
+          )}
+
+          {messages.map((msg) => (
+            <div
+              key={msg.id}
+              style={{
+                display: "flex",
+                justifyContent:
+                  msg.role === "user" ? "flex-end" : "flex-start",
+                marginBottom: "0.5rem",
+              }}
+            >
+              <div
+                style={{
+                  maxWidth: "80%",
+                  padding: "0.5rem 0.75rem",
+                  borderRadius: "999px",
+                  fontSize: "0.85rem",
+                  lineHeight: 1.4,
+                  background:
+                    msg.role === "user" ? "#111827" : "#e5e7eb",
+                  color:
+                    msg.role === "user"
+                      ? "#f9fafb"
+                      : "#111827",
+                }}
+              >
+                {msg.content}
+              </div>
+            </div>
+          ))}
+
+          {/* Auto-scroll anchor */}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {error && (
+          <div
+            style={{
+              padding: "0.5rem 1rem",
+              fontSize: "0.8rem",
+              color: "#b91c1c",
+              background: "#fee2e2",
+              borderTop: "1px solid #fecaca",
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        {isSending && (
+          <div
+            style={{
+              padding: "0.25rem 1rem",
+              fontSize: "0.8rem",
+              color: "#6b7280",
+            }}
+          >
+            Assistant is typing…
+          </div>
+        )}
+
+        <form
+          onSubmit={handleSend}
+          style={{
+            padding: "0.75rem 1rem",
+            borderTop: "1px solid #eee",
+            display: "flex",
+            gap: "0.5rem",
+            background: "#ffffff",
+          }}
+        >
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Type a message…"
+            disabled={isSending}
+            style={{
+              flex: 1,
+              padding: "0.5rem 0.75rem",
+              borderRadius: "999px",
+              border: "1px solid #d1d5db",
+              fontSize: "0.9rem",
+              outline: "none",
+            }}
+          />
+          <button
+            type="submit"
+            disabled={isSending || !input.trim()}
+            style={{
+              padding: "0.5rem 1rem",
+              borderRadius: "999px",
+              border: "none",
+              fontSize: "0.9rem",
+              background: "#111827",
+              color: "#f9fafb",
+              cursor: isSending ? "default" : "pointer",
+            }}
+          >
+            {isSending ? "Sending…" : "Send"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default ChatWindow;
+
+
+----------------------------------------------
+FILE: src/jest-dom.d.ts
+----------------------------------------------
+
+import "@testing-library/jest-dom";
+
+export {};
+
+
+----------------------------------------------
+FILE: src/main.tsx
+----------------------------------------------
+
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
+import App from './App';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
+  </React.StrictMode>
+);
+
+
+----------------------------------------------
+FILE: src/setupTests.ts
+----------------------------------------------
+
+// packages/frontend/src/setupTests.ts
+
+// Extend Jest with @testing-library/jest-dom matchers
+import "@testing-library/jest-dom";
+
+import { TextEncoder, TextDecoder } from "util";
+
+// Polyfill TextEncoder / TextDecoder for react-router / whatwg URL, etc.
+if (!(global as any).TextEncoder) {
+  (global as any).TextEncoder = TextEncoder;
+}
+
+if (!(global as any).TextDecoder) {
+  (global as any).TextDecoder = TextDecoder as any;
+}
+
+
+----------------------------------------------
+FILE: src/vite-env.d.ts
+----------------------------------------------
+
+/// <reference types="vite/client" />
+
+
+----------------------------------------------
+FILE: tsconfig.json
+----------------------------------------------
+
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "types": [
+      "jest",
+      "@testing-library/jest-dom"
+    ]
+  },
+  "include": ["src"]
+}
+
+
+----------------------------------------------
+FILE: tsconfig.node.json
+----------------------------------------------
+
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true
+  },
+  "include": ["vite.config.ts"]
+}
+
+
+----------------------------------------------
+FILE: vite.config.ts
+----------------------------------------------
+
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 5173,
+  },
+});
+
