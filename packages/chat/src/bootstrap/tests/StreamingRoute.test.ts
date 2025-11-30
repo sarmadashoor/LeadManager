@@ -2,7 +2,7 @@
 
 import Fastify from "fastify";
 import { describe, it, expect, beforeAll, afterAll } from "@jest/globals";
-import { registerRoutes } from "../../api/routes";
+import { registerRoutes } from "../routes";
 
 describe("Chat API streaming route (Fastify)", () => {
   let app: ReturnType<typeof Fastify>;

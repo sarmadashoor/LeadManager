@@ -1,7 +1,7 @@
 // packages/chat/src/ai/providers/__tests__/ClaudeProvider.test.ts
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import { TestData, MockAPI } from '../../../__tests__/test-utils';
+import { TestData, MockAPI } from '../../../testing/test-utils';
 
 /**
  * TDD: RED Phase - Write tests BEFORE implementation

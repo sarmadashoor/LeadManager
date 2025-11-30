@@ -1,6 +1,6 @@
 // packages/chat/src/repositories/LeadContextRepository.ts
 
-import db from '../infrastructure/db';
+import db from '../../infrastructure/db';
 
 export interface LeadContext {
   customer: {

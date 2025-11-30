@@ -1,7 +1,7 @@
 // @ts-nocheck
 
-import db from '../../infrastructure/db';
-import { LeadContextRepository } from '../../repositories/LeadContextRepository';
+import db from '../../../infrastructure/db';
+import { LeadContextRepository } from '../LeadContextRepository';
 
 describe('Contract: Orchestrator lead data <> Chat lead context', () => {
   const leadContextRepo = new LeadContextRepository();

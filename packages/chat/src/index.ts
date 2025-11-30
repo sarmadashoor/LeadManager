@@ -4,25 +4,26 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 // AI Services
-export { AIService } from './ai/AIService';
-export { ChatContext } from './ai/AIService';
+export { AIService, ChatContext } from './ai/AIService';
 export * from './ai/providers';
 
 // Repositories
-export { LeadContextRepository } from './repositories/LeadContextRepository';
-export { ChatMessageRepository } from './repositories/ChatMessageRepository';
-export type { ChatMessage, ChatSession } from './repositories/ChatMessageRepository';
+export { ChatMessageRepository } from './modules/chat/ChatMessageRepository';
+export type {
+  ChatMessage,
+  ChatSession,
+} from './modules/chat/ChatMessageRepository';
 
 // Services
-export { ChatService } from './services/ChatService';
-export type { ChatResponse } from './services/ChatService';
+export { ChatService } from './modules/chat/ChatService';
+export type { ChatResponse } from './modules/chat/ChatService';
 
 // API
-export { ChatController } from './api/controllers/ChatController';
-export { chatRoutes } from './api/routes';
+export { ChatController } from './modules/chat/ChatController';
+export { chatRoutes } from './bootstrap/routes';
 
 // Server
-export { buildServer } from './server';
+export { buildServer } from './bootstrap/server';
 
 console.log('🚀 Chat service initialized');
 console.log(`📡 AI Provider: ${process.env.AI_PROVIDER || 'claude'}`);

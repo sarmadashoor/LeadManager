@@ -2,9 +2,9 @@
 
 import Fastify from "fastify";
 import { describe, it, expect, beforeAll, afterAll, jest } from "@jest/globals";
-import { registerRoutes } from "../api/routes";
-import { AIService } from "../ai/AIService";
-import { ChatService } from "../services/ChatService";
+import { registerRoutes } from "../routes";
+import { AIService } from "../../ai/AIService";
+import { ChatService } from "../../modules/chat/ChatService";
 
 describe("Chat API Fastify server", () => {
   let app: ReturnType<typeof Fastify>;

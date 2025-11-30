@@ -1,7 +1,7 @@
 // packages/chat/src/api/controllers/ChatController.ts
 
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { ChatService } from '../../services/ChatService';
+import { ChatService } from './ChatService';
 
 interface SendMessageRequest {
   Params: {

@@ -1,6 +1,6 @@
 // packages/chat/src/repositories/ChatMessageRepository.ts
 
-import db from '../infrastructure/db';
+import db from '../../infrastructure/db';
 import { randomUUID } from 'crypto';
 
 export interface ChatMessage {

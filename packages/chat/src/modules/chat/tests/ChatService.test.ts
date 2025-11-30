@@ -2,14 +2,18 @@
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { ChatService } from '../ChatService';
-import { AIService } from '../../ai/AIService';
-import { LeadContextRepository } from '../../repositories/LeadContextRepository';
-import { ChatMessageRepository } from '../../repositories/ChatMessageRepository';
+import { AIService } from '../../../ai/AIService';
+import { LeadContextRepository } from '../../lead_context/LeadContextRepository';
+import {
+  ChatMessageRepository,
+  ChatMessage,
+} from '../ChatMessageRepository';
 import { randomUUID } from 'crypto';
 
-jest.mock('../../ai/AIService');
-jest.mock('../../repositories/LeadContextRepository');
-jest.mock('../../repositories/ChatMessageRepository');
+jest.mock('../../../ai/AIService');
+jest.mock('../../lead_context/LeadContextRepository');
+jest.mock('../ChatMessageRepository');
+
 
 describe('ChatService', () => {
   let chatService: ChatService;

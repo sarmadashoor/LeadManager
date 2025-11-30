@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch src/bootstrap/server.ts",
     "demo": "tsx src/demo.ts",
     "build": "tsc",
     "test": "jest",
-    "test:contracts": "jest src/__tests__/contracts",
+    "test:contracts": "jest src/modules/lead_context/tests",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "type-check": "tsc --noEmit"

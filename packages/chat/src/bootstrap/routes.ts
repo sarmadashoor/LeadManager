@@ -1,11 +1,11 @@
 // packages/chat/src/api/routes.ts
 
 import { FastifyInstance } from "fastify";
-import { ChatController } from "./controllers/ChatController";
-import { ChatService } from "../services/ChatService";
+import { ChatController } from '../modules/chat/ChatController';
+import { ChatService } from "../modules/chat/ChatService";
 import { AIService } from "../ai/AIService";
-import { LeadContextRepository } from "../repositories/LeadContextRepository";
-import { ChatMessageRepository } from "../repositories/ChatMessageRepository";
+import { LeadContextRepository } from '../modules/lead_context/LeadContextRepository';
+import { ChatMessageRepository } from '../modules/chat/ChatMessageRepository';
 
 export async function chatRoutes(app: FastifyInstance): Promise<void> {
   const aiService = new AIService();

@@ -1,7 +1,7 @@
 // packages/chat/src/ai/AIService.ts
 
 import { AIProvider, createAIProvider, ProviderType } from './providers';
-import { AIConfig, loadAIConfig } from '../config/ai-config';
+import { AIConfig, loadAIConfig } from '../config/ai';
 
 export interface ChatContext {
   customer: {

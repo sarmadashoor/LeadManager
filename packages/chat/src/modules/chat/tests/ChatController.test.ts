@@ -1,11 +1,12 @@
 // packages/chat/src/api/controllers/__tests__/ChatController.test.ts
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import { ChatController } from '../ChatController';
-import { ChatService } from '../../../services/ChatService';
+import { ChatController } from '../../../modules/chat/ChatController';
+import { ChatService } from '../ChatService';
+
 import { randomUUID } from 'crypto';
 
-jest.mock('../../../services/ChatService');
+jest.mock('../ChatService');
 
 describe('ChatController', () => {
   let controller: ChatController;

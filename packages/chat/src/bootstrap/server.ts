@@ -5,7 +5,7 @@ dotenv.config();
 
 import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
-import { chatRoutes } from './api/routes';
+import { chatRoutes } from './routes';
 
 export async function buildServer(): Promise<FastifyInstance> {
   const app = Fastify({

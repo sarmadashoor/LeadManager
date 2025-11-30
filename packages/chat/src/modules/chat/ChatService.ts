@@ -1,8 +1,11 @@
-// packages/chat/src/services/ChatService.ts
+// packages/chat/src/modules/chat/ChatService.ts
 
-import { AIService, ChatContext } from '../ai/AIService';
-import { LeadContextRepository } from '../repositories/LeadContextRepository';
-import { ChatMessageRepository, ChatMessage } from '../repositories/ChatMessageRepository';
+import { AIService, ChatContext } from '../../ai/AIService';
+import { LeadContextRepository } from '../lead_context/LeadContextRepository';
+import {
+  ChatMessageRepository,
+  ChatMessage,
+} from './ChatMessageRepository';
 
 export interface ChatResponse {
   content: string;
@@ -24,34 +27,32 @@ export class ChatService {
     }
 
     const history = await this.messageRepo.getMessagesByLead(leadId);
-    const conversationHistory = history.map(msg => ({
+    const conversationHistory = history.map((msg: ChatMessage) => ({
       role: msg.role,
-      content: msg.content
+      content: msg.content,
     }));
 
     const completeContext: ChatContext = {
       ...context,
-      conversationHistory
+      conversationHistory,
     };
 
     await this.messageRepo.saveMessage(leadId, 'user', userMessage);
 
-    const aiResponse = await this.aiService.generateResponse(completeContext, userMessage);
-
-    await this.messageRepo.saveMessage(
-      leadId,
-      'assistant',
-      aiResponse.content,
-      {
-        provider: aiResponse.provider,
-        ...aiResponse.metadata
-      }
+    const aiResponse = await this.aiService.generateResponse(
+      completeContext,
+      userMessage
     );
+
+    await this.messageRepo.saveMessage(leadId, 'assistant', aiResponse.content, {
+      provider: aiResponse.provider,
+      ...aiResponse.metadata,
+    });
 
     return {
       content: aiResponse.content,
       provider: aiResponse.provider,
-      metadata: aiResponse.metadata
+      metadata: aiResponse.metadata,
     };
   }
 

@@ -1,0 +1,50 @@
+chat
+├── src
+│   ├── ai
+│   │   ├── providers
+│   │   │   ├── __tests__
+│   │   │   │   ├── ClaudeProvider.test.ts
+│   │   │   │   └── OpenAIProvider.test.ts
+│   │   │   ├── AIProvider.ts
+│   │   │   ├── ClaudeProvider.ts
+│   │   │   ├── index.ts
+│   │   │   └── OpenAIProvider.ts
+│   │   └── AIService.ts
+│   ├── bootstrap
+│   │   ├── tests
+│   │   │   ├── server-fastify.test.ts
+│   │   │   └── StreamingRoute.test.ts
+│   │   ├── routes.ts
+│   │   └── server.ts
+│   ├── config
+│   │   └── ai.ts
+│   ├── infrastructure
+│   │   └── db.ts
+│   ├── modules
+│   │   ├── chat
+│   │   │   ├── tests
+│   │   │   │   ├── ChatController.test.ts
+│   │   │   │   ├── ChatMessageRepository.test.ts
+│   │   │   │   └── ChatService.test.ts
+│   │   │   ├── ChatController.ts
+│   │   │   ├── ChatMessageRepository.ts
+│   │   │   └── ChatService.ts
+│   │   └── lead_context
+│   │       ├── tests
+│   │       │   ├── LeadContextContract.test.ts
+│   │       │   └── LeadContextRepository.test.ts
+│   │       └── LeadContextRepository.ts
+│   ├── testing
+│   │   ├── setup.ts
+│   │   └── test-utils.ts
+│   ├── demo.ts
+│   └── index.ts
+├── _chat_files_dump.txt
+├── _chat_tree.txt
+├── .env
+├── API.md
+├── dump-chat-structure.mjs
+├── jest.config.js
+├── package.json
+├── README.md
+└── tsconfig.json

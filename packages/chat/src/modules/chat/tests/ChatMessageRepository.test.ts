@@ -2,7 +2,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, afterAll } from '@jest/globals';
 import { ChatMessageRepository } from '../ChatMessageRepository';
-import db from '../../infrastructure/db';
+import db from '../../../infrastructure/db';
 import { randomUUID } from 'crypto';
 
 describe('ChatMessageRepository', () => {
