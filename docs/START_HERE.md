@@ -1,82 +1,72 @@
-# 📘 Lead Orchestrator — START HERE
+# Lead Orchestrator — START HERE
 
-**Last Updated:** November 28, 2025  
-**Status:** Orchestrator + Chat API + Service Catalog Complete  
-**Next:** Frontend integration, Authentication, Prompt Update
+**Last Updated:** November 29, 2025  
+**Status:** Orchestrator + Chat API Complete  
+**Next:** Frontend integration, authentication, catalog-driven prompt updates
 
----
-
-## 🎯 Purpose
-
-This is the entry point for LLMs and developers joining the project. It explains how the repo is organized, what's already built, and where to look next.
+This is the entry point for developers and LLMs.  
+It explains *only* how to orient yourself and where the authoritative docs live.
 
 ---
 
-## 🧭 How To Navigate This Repo
+## 🧭 What to Read (in Order)
 
-### Read these docs in order:
+1. **START_HERE.md** (you are here)  
+2. **README.md** — How to run services, env setup, dev workflow  
+3. **docs/MVP_LOGIC.md** — Business logic + lead criteria + touchpoints  
+4. **docs/architecture/SYSTEM_OVERVIEW.md** — System flow + service interactions  
+5. **PROJECT_STRUCTURE.md** — Auto-generated directory tree (for navigation)
 
-1. **`START_HERE.md`** (this file)  
-   Navigation + status + component overview
-
-2. **`PROJECT_STRUCTURE.txt`**  
-   Full directory tree (auto-generated)
-
-3. **`docs/HANDOFF.md`**  
-   Deep status report (feature-by-feature)
-
-4. **`docs/architecture/SYSTEM_OVERVIEW.md`**  
-   High-level architecture + request flows
-
-### For Specific Tasks:
-
-#### 🔹 Chat API
-- `packages/chat/README.md`
-- `packages/chat/API.md`
-- `packages/chat/src/services/*`
-- `packages/chat/src/api/controllers/*`
-
-#### 🔹 Orchestrator
-- `packages/orchestrator/README.md`
-- `packages/orchestrator/src/infrastructure/*`
-
-#### 🔹 Frontend (React)
-- `packages/frontend/src/components/ChatWindow.tsx`
-- `packages/frontend/src/setupTests.ts`
-- `packages/frontend/src/api/*` (to be created)
-
-#### 🔹 Business Logic
-- `docs/MVP_LOGIC.md`
-
-#### 🔹 Next Features
-- `docs/next_steps.md`
+All other documents have been archived to reduce duplication/noise.
 
 ---
 
-## 🚀 Quick Start Commands
+## 📦 Monorepo Overview
 
-### Orchestrator (Port 3000)
+```
+LeadManager/
+├── orchestrator/   → Lead ingestion, Shopmonkey, SMS/email, touchpoints
+├── chat/           → AI chat API (Claude + GPT-4o, REST + SSE)
+├── frontend/       → React/Vite customer chat UI
+└── shared/         → Shared TypeScript types + validation
+```
+
+- **Orchestrator (3000):**  
+  Webhooks → lead ingestion → multi-tenant DB → touchpoints (SendGrid/Twilio)  
+  Includes **outbound safety whitelist (fail-closed)**.
+
+- **Chat API (3001):**  
+  SSE + REST, multi-provider LLM routing, session/history storage.
+
+- **Frontend (5173):**  
+  React chat UI (integration in progress).
+
+---
+
+## 🚀 Quick Development Commands
+
+### Orchestrator (3000)
 
 ```bash
 cd packages/orchestrator
 npm run dev
 ```
 
-### Chat API (Port 3001)
+### Chat API (3001)
 
 ```bash
 cd packages/chat
 npm run dev
 ```
 
-### Frontend UI (Port 5173)
+### Frontend (5173)
 
 ```bash
 cd packages/frontend
 npm run dev
 ```
 
-### Expose Webhooks
+### Expose Webhooks (Shopmonkey)
 
 ```bash
 ngrok http 3000
@@ -88,123 +78,120 @@ ngrok http 3000
 npm test
 ```
 
----
-
-## 📦 Monorepo Overview
-
-```
-LeadManager/
-├── orchestrator/   → Webhooks, SMS, lead lifecycle (COMPLETE)
-├── chat/           → AI chat API (COMPLETE, 33 tests)
-├── frontend/       → React chat UI (STARTED + TDD setup)
-└── shared/         → Shared types + validation
-```
-
----
-
-## 🗄 Database (PostgreSQL)
-
-- Single shared DB across services
-- Hosted via `docker-compose.yml`
-- 12 migrations
-- Tables include:
-  - `leads`
-  - `chat_sessions`
-  - `chat_messages`
-  - `tenants`
-  - `location_hours`
-  - `service_catalog`
-  - `appointments`
-
-### Chat API uses:
-- `LeadContextRepository`
-- `ChatMessageRepository`
-- Shared connection pool
+For complete dev instructions → see **README.md**.
 
 ---
 
 ## 🏁 Current Status Snapshot
 
-### ✅ Completed
+### ✅ Orchestrator
 
-- Orchestrator: Webhooks, SMS, polling, lead lifecycle
-- Chat API: Multi-provider AI (Claude + OpenAI)
-- Chat endpoints: message, stream, history, context, health
-- Service catalog integration (ShopMonkey canned services)
-- Lead context building (vehicle, services, pricing)
-- TDD foundation across packages (40+ tests passing)
-- Frontend scaffolded, ChatWindow component tested
+- Real-time Shopmonkey webhooks
+- Backup polling (30s)
+- Touchpoint engine (13-touch sequence)
+- Multi-tenant database
+- SMS (Twilio) + Email (SendGrid)
+- Whitelist safety gate (fail-closed)
+- 47 passing tests
 
-### 🚧 In Progress
+### ✅ Chat API
 
-- Frontend chat integration (SSE + REST)
-- System prompt update (must include all services)
-- Build frontend API client (`src/api/chat.ts`)
-- Chat layout & UI polish
+- REST endpoints
+- SSE streaming
+- Claude Sonnet 4.5 + GPT-4o routing
+- Context loading via `LeadContextRepository`
+- 33 passing tests
 
-### 📌 Planned (Next 7 days)
+### 🚧 Frontend
 
-- Authentication (JWT or magic-link per lead)
-- Rate limiting
-- Chat link in SMS/email templates
-- Deployment strategy (chat, orchestrator, frontend)
-- Cloudflare / Nginx domains
-
----
-
-## 🔌 How Components Talk to Each Other
-
-```
-[Customer Browser]  →  Frontend (5173)
-      ↓                     ↓
- SSE / REST         →   Chat API (3001)
-      ↓                     ↓
-   PostgreSQL   ←  ChatMessageRepository
-                    LeadContextRepository
-```
-
-```
-[ShopMonkey]  →  Orchestrator (3000)
-      ↓
-   PostgreSQL  ← Orchestrator Repositories
-```
-
-### Frontend calls Chat API:
-- `POST /api/chat/:leadId`
-- `GET /api/chat/:leadId/history`
-- `GET /api/chat/:leadId/context`
-- `GET /api/chat/stream/:leadId` (SSE)
+- ChatWindow component ready
+- API client (`streaming.ts`) in progress
+- Needs end-to-end wiring to chat
 
 ---
 
-## ⚙️ Troubleshooting
+## 🔐 Whitelist Safety (Fail-Closed)
 
-### Port already in use
+Outbound messages (SMS/email) only send if:
 
 ```bash
-lsof -ti:3000 | xargs kill -9
-lsof -ti:3001 | xargs kill -9
+LEAD_EMAIL_WHITELIST="email1@example.com,email2@example.com"
 ```
 
-### Start DB
+If empty → no outbound communication is permitted.
 
-```bash
-docker-compose up -d
-```
-
-### Missing variables
-
-- Each package has its own `.env`
-- Chat needs: `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`
+Protects real customers during development.
 
 ---
 
-## 📞 Additional References
+## 🔌 System Communication (High-Level)
 
-| Purpose | File | Status |
-|---------|------|--------|
-| Summary | `docs/HANDOFF.md` | ✅ |
-| Architecture flow | `docs/architecture/SYSTEM_OVERVIEW.md` | ✅ |
-| Business logic | `docs/MVP_LOGIC.md` | ✅ |
-| Next steps | `docs/next_steps.md` | ✅ |
-| API contracts | `packages/chat/API.md` | ✅ |
+### Customer → Chat
+
+```
+Browser (5173)
+   → Chat API (3001)
+       → PostgreSQL
+```
+
+### Shopmonkey → Lead Ingestion
+
+```
+Shopmonkey
+   → Orchestrator (3000)
+       → PostgreSQL
+           → Touchpoint Processor (SendGrid/Twilio)
+```
+
+---
+
+## 🗄 Database Notes
+
+- Shared PostgreSQL instance
+- 12 migrations completed
+- Multi-tenant schema fully implemented
+
+### Key tables:
+
+- `tenants`
+- `locations`
+- `leads`
+- `chat_sessions`
+- `chat_messages`
+- `location_hours`
+- `service_catalog`
+- `appointments`
+
+### Chat API uses:
+
+- `LeadContextRepository`
+- `ChatMessageRepository`
+
+---
+
+## 📝 Development Notes
+
+- Each package has its own `.env`, isolated by design.
+- **Orchestrator** must include:  
+  `LEAD_EMAIL_WHITELIST`, `SHOPMONKEY_API_KEY`, `SENDGRID_*`, `TWILIO_*`.
+- **Chat API** must include at least one LLM key.
+- **Frontend** requires no secrets in development.
+- For canonical business logic → `docs/MVP_LOGIC.md`.
+
+---
+
+## 📁 Additional References
+
+- **Full architecture:** `docs/architecture/SYSTEM_OVERVIEW.md`
+- **Lead logic + timing rules:** `docs/MVP_LOGIC.md`
+- **Directory tree:** `PROJECT_STRUCTURE.md`
+- **Package-level docs:**
+  - `packages/chat/README.md`, `API.md`
+  - `packages/orchestrator/README.md`
+
+---
+
+This file is intentionally short, minimal, and non-duplicative.
+
+For all operational details → see **README.md**.  
+For business logic → see **docs/MVP_LOGIC.md**.

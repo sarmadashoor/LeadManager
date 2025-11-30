@@ -1,21 +1,43 @@
 # @lead-manager/orchestrator
 
-Lead management and orchestration service for automotive service businesses. Handles Shopmonkey CRM integration, SMS/email automation, and lead lifecycle management.
+Lead management and orchestration service for automotive service businesses. Handles Shopmonkey CRM integration, outbound SMS/email automation, and lead lifecycle management.
 
 **Status:** ✅ Core API Complete, 🚧 Production Integration Needed  
-**Tests:** 47 passing  
+**Outbound Safety:** 🔐 Default fail-closed (no SMS/email unless explicitly whitelisted)  
 **Port:** 3000
 
----
+## ⚠️ SAFETY FIRST — READ BEFORE RUNNING
+
+This service can send real emails and SMS messages.
+
+### To protect real customers:
+
+🔐 **Outbound communications require explicit whitelisting**
+
+We now enforce a hard outbound email whitelist:
+
+- Only emails explicitly listed in `LEAD_EMAIL_WHITELIST` may receive outbound messaging.
+- If whitelist is empty, ALL outbound is disabled.
+- SMS is also blocked unless the lead's email is whitelisted.
+
+This protects against accidentally contacting real Tint World customers.
+
+**Example:**
+
+```bash
+LEAD_EMAIL_WHITELIST="sam@example.com,test@test.com"
+```
+
+Anything not on this list is fully skipped.
 
 ## Quick Start
+
 ```bash
 # Install dependencies (from workspace root)
 npm install
 
-# Set up environment variables
+# Create environment file
 cp .env.example .env
-# Add your credentials to .env
 
 # Start database
 docker-compose up -d
@@ -23,20 +45,16 @@ docker-compose up -d
 # Run migrations
 npm run migrate
 
-# Run tests
-npm test
-
-# Start server
+# Start orchestrator (dev mode)
 npm run dev
 ```
 
-Server will start at `http://localhost:3000`
-
----
+Server runs at: `http://localhost:3000`
 
 ## Environment Variables
 
-Create a `.env` file in this directory:
+Create `.env` in `packages/orchestrator/`:
+
 ```bash
 # Database
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/lead_orchestrator
@@ -45,375 +63,276 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/lead_orchestrator
 SHOPMONKEY_API_KEY=your_api_key
 SHOPMONKEY_COMPANY_ID=your_company_id
 
-# Twilio (SMS)
-TWILIO_ACCOUNT_SID=ACxxxxxxxxx
-TWILIO_AUTH_TOKEN=your_auth_token
-TWILIO_PHONE_NUMBER=+1234567890
-
-# SendGrid (Email)
-SENDGRID_API_KEY=SG.xxxxxxxxx
+# Messaging - SendGrid
+SENDGRID_API_KEY=SG.xxxxxxx
 SENDGRID_FROM_EMAIL=noreply@yourdomain.com
 
-# Tenant Configuration
+# Messaging - Twilio (optional; auto-disabled if missing)
+TWILIO_ACCOUNT_SID=ACxxxxxxxx
+TWILIO_AUTH_TOKEN=xxxxxxxxxx
+TWILIO_PHONE_NUMBER=+1234567890
+
+# Tenant
 TENANT_ID=your_tenant_uuid
 
-# Optional
-DEMO_MODE=true              # Only process test leads
-POLL_INTERVAL_MS=30000      # 30 seconds
+# Outbound Safety (required for outbound messaging)
+# Comma-separated list of allowed outbound recipient emails
+# If empty → ALL outbound disabled; SMS also blocked by design
+LEAD_EMAIL_WHITELIST="sam@example.com,test@example.com"
+
+# Behavior
+DEMO_MODE=false
+POLL_INTERVAL_SECONDS=30
 WEBHOOK_PORT=3000
 LOG_LEVEL=info
 ```
 
----
+### 🔐 Important Behavior Notes
+
+| Setting | Behavior |
+|---------|----------|
+| `LEAD_EMAIL_WHITELIST` empty | ❌ No outbound email or SMS allowed |
+| Email not in whitelist | ❌ Touch point skipped entirely |
+| SMS without whitelist pass | ❌ Blocked |
+| Twilio not configured | SMS disabled (safe default) |
 
 ## Architecture
 
-### Lead Ingestion (Dual Strategy)
+### Lead Ingestion – Dual Strategy
 
-**Primary: Webhooks (Real-time)**
-```
-Shopmonkey → ngrok → Webhook Handler → Database
-                                     ↓
-                                  SMS/Email
-```
+#### Primary: Webhooks (Real-time)
 
-**Backup: Polling (Every 30s)**
 ```
-Cron Job → Shopmonkey API → Lead Processor → Database
-                                           ↓
-                                        SMS/Email
+Shopmonkey → ngrok (local) / production URL → Webhook Handler → DB
+                                                   ↓
+                                           Touch Point Processor
 ```
 
-### Core Services
-```
-LeadOrchestrationService
-    ↓
-┌───┴────┬─────────┬──────────┬──────────┐
-│        │         │          │          │
-Shopmonkey  Twilio  SendGrid  Touch    Lead
-Adapter     Service Service   Point   Repository
-                              Processor
-```
+#### Backup: Polling (Every 30s)
 
----
+```
+Cron Loop → Shopmonkey API → Sync → DB
+                                  ↓
+                         Touch Point Processor
+```
 
 ## Key Features
 
-### 1. Real-time Webhook Processing
-- Instant notification when leads created in Shopmonkey
-- <1 second response time
-- Validates and enriches lead data
-- Sends immediate SMS to customer
+### 🔐 1. Outbound Safety Gate (NEW)
 
-### 2. Polling Backup
+Every outbound touch point passes through this logic:
+
+```javascript
+if (!isWhitelistedEmail(customerEmail)) → skip everything
+```
+
+- Protects real customers
+- Required for development
+- Works for both SMS and Email
+
+### 2. Real-Time Webhook Processing
+
+- Order created → instant lead creation
+- <100ms internal processing
+- Idempotent
+
+### 3. Polling Backup (Fail-Safe)
+
 - Runs every 30 seconds
-- Catches any missed webhooks
-- Processes website leads from Shopmonkey
-- Fail-safe mechanism
+- Catches missed webhook events
+- Syncs website leads
 
-### 3. Touch Point Automation
+### 4. Touch Point Automation
+
 - Runs every 10 seconds
-- Schedules follow-up communications
-- Handles multi-step nurture sequences
-- SMS and email support
+- Generates nurture sequence (email + SMS)
+- Now obeys whitelist safety gate
 
-### 4. Multi-Tenant Architecture
-- Ready for 200+ franchise locations
-- Tenant isolation in database
-- Location-specific pricing and hours
-- Centralized management
+### 5. Multi-Tenant Architecture
 
----
+- Designed for 200+ franchise locations
+- Database isolation
+- Shopmonkey account isolation
 
 ## API Endpoints
 
-### Webhooks
+### POST /webhooks/shopmonkey/order
 
-**POST /webhooks/shopmonkey/order**
-Receives order creation webhooks from Shopmonkey.
+Receives order creation webhooks.
 
 **Request Headers:**
+
 ```
-X-Shopmonkey-Signature: signature_here
+X-Shopmonkey-Signature: <signature>
 Content-Type: application/json
 ```
 
-**Payload:** Shopmonkey order webhook event
-
 **Response:**
-```json
-{
-  "success": true,
-  "leadId": "uuid"
-}
-```
 
----
+```json
+{ "success": true, "leadId": "uuid" }
+```
 
 ## Database
 
-### Migrations
+Run migrations:
+
 ```bash
-# Run all migrations
 npm run migrate
-
-# Rollback last migration
 npm run migrate:rollback
-
-# Create new migration
 npm run migrate:make migration_name
 ```
 
 ### Key Tables
 
-**Core Tables:**
-- `tenants` - Franchise organizations
-- `locations` - Physical store locations
-- `leads` - Customer leads (main table)
-- `location_hours` - Business hours per location
-- `service_catalog` - Services and pricing
+- `tenants`
+- `leads`
+- `job_executions`
+- `location_hours`
+- `service_catalog`
+- `chat_sessions`
+- `chat_messages`
 
-**Job Tables:**
-- `job_executions` - Polling and processing jobs
+### Lead Lifecycle
 
-**Chat Tables (shared with chat service):**
-- `chat_sessions` - Conversation sessions
-- `chat_messages` - Individual messages
-
-### Lead Lifecycle States
-
-1. **new** - Just created, no contact yet
-2. **contacted** - Initial SMS/email sent
-3. **engaged** - Customer responded
-4. **qualified** - Ready for appointment
-5. **appointment_set** - Appointment booked
-6. **completed** - Service completed
-7. **lost** - Customer declined
-
----
-
-## Components
-
-### Infrastructure Layer
-
-**CRM Integration (`src/infrastructure/crm/`)**
-- `ShopMonkeyAdapter.ts` - API client for Shopmonkey
-- Fetches orders, customers, vehicles, services
-- Handles rate limiting and errors
-
-**Webhooks (`src/infrastructure/webhooks/`)**
-- `ShopMonkeyWebhookHandler.ts` - Processes webhook events
-- Signature verification
-- Lead validation and enrichment
-
-**Messaging (`src/infrastructure/messaging/`)**
-- `TwilioService.ts` - SMS via Twilio
-- `SendGridService.ts` - Email via SendGrid
-- Template support
-
-**Jobs (`src/infrastructure/jobs/`)**
-- `LeadPollingService.ts` - Polls Shopmonkey every 30s
-- `TouchPointProcessor.ts` - Handles follow-ups every 10s
-
-**Persistence (`src/infrastructure/persistence/`)**
-- `db.ts` - Database connection (Knex)
-- `repositories/` - Data access layer
-- `migrations/` - Database schema versions
-
-### Service Layer
-
-**LeadOrchestrationService**
-- Coordinates lead processing
-- Calls CRM, messaging, and database
-- Main business logic
-
----
-
-## Testing
-```bash
-# Run all tests
-npm test
-
-# Watch mode
-npm test:watch
-
-# Coverage
-npm test:coverage
-
-# Integration tests only
-npm test -- --testPathPattern=integration
-```
-
-**Test Coverage:** 47 tests
-- Repository tests: Database operations
-- Service tests: Business logic
-- Integration tests: End-to-end flows
-
----
+- `new`
+- `contacted`
+- `engaged`
+- `qualified`
+- `appointment_set`
+- `completed`
+- `lost`
 
 ## Development
 
-### Running Locally
+### Local Run
 
-**Terminal 1: Database**
+**Terminal 1: DB**
+
 ```bash
 docker-compose up
 ```
 
 **Terminal 2: Orchestrator**
+
 ```bash
-cd packages/orchestrator
 npm run dev
 ```
 
 **Terminal 3: ngrok (for webhooks)**
+
 ```bash
 ngrok http 3000
-# Copy the HTTPS URL and configure in Shopmonkey
 ```
 
-### Testing Webhooks
+### Outbound Testing
 
-Use ngrok URL in Shopmonkey:
-1. Go to Settings → Webhooks
-2. Add webhook: `https://YOUR_NGROK_URL.ngrok.io/webhooks/shopmonkey/order`
-3. Subscribe to: Order Created
-4. Create test order in Shopmonkey
-5. Watch logs for webhook processing
+**1. Add your email to whitelist**
+
+```bash
+LEAD_EMAIL_WHITELIST="your_email@example.com"
+```
+
+**2. Trigger a touch point**
+
+- Create order in Shopmonkey
+- Watch terminal logs
+- Verify:
+
+```
+[TouchPoint] Email your_email@example.com is whitelisted → SENDING
+```
+
+**3. Non-whitelisted lead**
+
+Should show:
+
+```
+Email <customer> NOT whitelisted; skipping all outbound
+```
+
+This confirms safety behavior.
 
 ### Demo Mode
 
-Set `DEMO_MODE=true` to only process leads with:
-- Customer email containing "test" or "demo"
-- Phone numbers starting with +1555
+`DEMO_MODE=true` filters inbound leads from Shopmonkey.
 
----
+**Note:**
+- It does not override the whitelist.
+- Safety gate always applies.
 
 ## Deployment
 
-### Development
-```bash
-npm run dev
-# Requires ngrok for webhooks
-```
+### Production Run
 
-### Production
 ```bash
 npm run build
 node dist/index.js
-
-# Set up proper DNS and SSL
-# Configure Shopmonkey webhook to production URL
 ```
 
-**Production Checklist:**
+### Production Checklist
+
 - [ ] Set `DEMO_MODE=false`
-- [ ] Configure real Shopmonkey webhook URL
-- [ ] Set up SSL certificate
-- [ ] Configure monitoring/alerting
-- [ ] Set up log aggregation
-- [ ] Enable database backups
+- [ ] Configure `LEAD_EMAIL_WHITELIST` correctly
+- [ ] Set real webhook URL in Shopmonkey
+- [ ] Enable SSL
+- [ ] Set up logs + monitoring
+- [ ] Turn on Postgres backups
 
----
+### Monitoring
 
-## Monitoring
+Track:
 
-### Logs
-
-All services use structured logging (pino):
-```javascript
-console.log('[Service] Action completed', { leadId, duration });
-```
-
-### Health Checks
-
-Monitor these processes:
-- Webhook server running (port 3000)
-- Polling service running (logs every 30s)
-- Touch point processor running (logs every 10s)
-- Database connection healthy
-
-### Metrics to Track
-
-- Leads created per hour
-- Webhook response time
-- SMS delivery rate
-- Email delivery rate
+- Webhook processing rate
 - Touch point success rate
-- Database query performance
-
----
+- Outbound skip rate (due to whitelist)
+- Lead ingestion rate
+- SMS/Email delivery
 
 ## Troubleshooting
 
-**"Webhook signature invalid"**
-- Verify `SHOPMONKEY_API_KEY` matches key in Shopmonkey
-- Check webhook payload format hasn't changed
+### Outbound not sending
 
-**"SMS not sending"**
-- Verify Twilio credentials
-- Check phone number format (+1XXXXXXXXXX)
-- Verify Twilio account balance
+- Check whitelist
+- Check Twilio/SendGrid keys
+- Check if SMS blocked due to whitelist
 
-**"No leads being polled"**
-- Check `DEMO_MODE` setting
-- Verify Shopmonkey API credentials
-- Check date range in polling logic
+### Webhook not firing
 
-**"Database connection failed"**
+- Verify ngrok URL
+- Verify Shopmonkey webhook setup
+
+### Database issues
+
 ```bash
-docker-compose up -d  # Start PostgreSQL
-npm run migrate       # Run migrations
+docker-compose up -d
+npm run migrate
 ```
-
-**"Port 3000 already in use"**
-```bash
-lsof -ti:3000 | xargs kill -9
-npm run dev
-```
-
----
 
 ## Integration with Chat Service
 
-The orchestrator shares the same PostgreSQL database with the chat service. When a lead is ready for chat:
+**Flow:**
 
-1. Orchestrator creates lead in database
-2. Orchestrator sends SMS with chat link
-3. Customer clicks link → Opens chat UI (future)
-4. Chat UI calls Chat API (port 3001)
-5. Chat API reads lead data from shared database
-
-**Future:** Orchestrator will serve the frontend HTML and coordinate the full customer experience.
-
----
+1. Lead stored by orchestrator
+2. Touch point sends link: `https://chat.tintworld.com/<leadId>`
+3. Customer opens chat frontend
+4. Chat API (port 3001) loads lead context
+5. AI responds
 
 ## Performance
 
-**Webhook Processing:**
-- Response time: <100ms
-- Throughput: 100+ webhooks/minute
+- **Webhook:** <100ms internal
+- **Touch point loop:** every 10s
+- **Polling:** every 30s
+- Can scale horizontally
 
-**Polling:**
-- Cycle time: 30 seconds
-- Shopmonkey API latency: 200-500ms
-- Processes 10-50 leads per cycle
+## Related Docs
 
-**Touch Points:**
-- Processing interval: 10 seconds
-- SMS send: 1-2s per message
-- Email send: 1-3s per message
+- `../../docs/architecture/SYSTEM_OVERVIEW.md`
+- `../../docs/MVP_LOGIC.md`
+- `../chat/README.md`
 
 ---
 
-## Related Documentation
-
-- **System Overview:** `../../docs/architecture/SYSTEM_OVERVIEW.md`
-- **Implementation History:** `../../docs/architecture/PHASED_IMPLEMENTATION.md`
-- **Business Logic:** `../../docs/MVP_LOGIC.md`
-- **Chat API:** `../chat/README.md`
-
----
-
-**Maintained by:** Lead Orchestrator Team  
-**Last Updated:** November 27, 2025
+**Maintained by:** Lead Manager Engineering  
+**Last Updated:** November 30, 2025 (whitelist-safe version)

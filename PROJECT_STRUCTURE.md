@@ -1,6 +1,6 @@
 # Lead Orchestrator - Project Structure
 
-**Generated:** 2025-11-29T09:00:39.744Z
+**Generated:** 2025-11-30T01:57:37.556Z
 **Status:** Chat API Complete, Frontend Next
 
 This file is auto-generated. Run `node generate-structure.js` to update.
@@ -82,12 +82,17 @@ LeadManager/
 │   │   ├── package.json
 │   │   ├── src
 │   │   │   ├── App.tsx
+│   │   │   ├── api
+│   │   │   │   ├── chat.ts
+│   │   │   │   ├── client.ts
+│   │   │   │   └── streaming.ts
 │   │   │   ├── components
 │   │   │   │   ├── ChatWindow.test.tsx
 │   │   │   │   └── ChatWindow.tsx
 │   │   │   ├── jest-dom.d.ts
 │   │   │   ├── main.tsx
-│   │   │   └── setupTests.ts
+│   │   │   ├── setupTests.ts
+│   │   │   └── vite-env.d.ts
 │   │   ├── tsconfig.json
 │   │   ├── tsconfig.node.json
 │   │   └── vite.config.ts
