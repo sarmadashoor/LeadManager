@@ -7,6 +7,15 @@
   </head>
   <body>
     <div id="root"></div>
+
+    <!-- Runtime config for dev -->
+    <script>
+      // Turn streaming ON in dev
+      window.__CHAT_STREAMING_ENABLED__ = true;
+      // Point frontend streaming at the chat API
+      window.__CHAT_API_BASE_URL__ = "http://localhost:3001";
+    </script>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

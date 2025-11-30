@@ -1,21 +1,25 @@
 {
   "name": "@lead-manager/orchestrator",
   "version": "1.0.0",
-  "main": "src/index.ts",
+  "main": "dist/server-fastify.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch src/server-fastify.ts",
     "build": "tsc",
+    "start": "node dist/server-fastify.js",
+
     "test": "jest",
+
     "test:services": "tsx src/test-shopmonkey-services.ts",
-    "migrate": "knex migrate:latest",
-    "migrate:latest": "knex migrate:latest",
-    "migrate:rollback": "knex migrate:rollback",
     "test:sync": "tsx src/test-service-sync.ts",
     "debug:sync": "tsx src/debug-service-sync.ts",
     "force:sync": "tsx src/force-sync.ts",
     "analyze:services": "tsx src/analyze-services.ts",
     "recategorize": "tsx src/recategorize-services.ts",
-    "show:other": "tsx src/show-other-services.ts"
+    "show:other": "tsx src/show-other-services.ts",
+
+    "migrate": "knex migrate:latest",
+    "migrate:latest": "knex migrate:latest",
+    "migrate:rollback": "knex migrate:rollback"
   },
   "dependencies": {
     "@lead-manager/shared": "*",
