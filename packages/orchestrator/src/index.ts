@@ -6,6 +6,18 @@ import { TwilioService } from './infrastructure/messaging/TwilioService';
 import { SendGridService } from './infrastructure/messaging/SendGridService';
 import { registerShopMonkeyWebhook } from './infrastructure/webhooks/ShopMonkeyWebhookHandler';
 
+const EMAIL_WHITELIST = (process.env.LEAD_EMAIL_WHITELIST || '')
+  .split(',')
+  .map(e => e.trim().toLowerCase())
+  .filter(Boolean);
+
+function isWhitelistedEmail(email?: string | null): boolean {
+  if (!email) return false;
+  // Fail CLOSED: if no whitelist configured, send nothing
+  if (EMAIL_WHITELIST.length === 0) return false;
+  return EMAIL_WHITELIST.includes(email.toLowerCase());
+}
+
 async function main() {
   console.log('Lead Orchestrator starting...');
 
@@ -33,6 +45,11 @@ async function main() {
   console.log(`  - Demo Mode: ${demoMode ? 'ON (only test leads)' : 'OFF (all leads)'}`);
   console.log(`  - Poll Interval: ${process.env.POLL_INTERVAL_SECONDS || 30}s`);
   console.log(`  - Webhook Port: ${webhookPort}`);
+  console.log(
+    `  - Email whitelist: ${
+      EMAIL_WHITELIST.length ? EMAIL_WHITELIST.join(', ') : '(EMPTY – all outbound disabled by whitelist)'
+    }`
+  );
 
   // Initialize Fastify server for webhooks
   const fastify = Fastify({
@@ -40,11 +57,12 @@ async function main() {
   });
 
   // Register webhook routes
-registerShopMonkeyWebhook(fastify, tenantId, {
-  apiKey: process.env.SHOPMONKEY_API_KEY!,
-  baseUrl: process.env.SHOPMONKEY_BASE_URL || 'https://api.shopmonkey.cloud/v3',
-  demoMode
-});
+  registerShopMonkeyWebhook(fastify, tenantId, {
+    apiKey: process.env.SHOPMONKEY_API_KEY!,
+    baseUrl: process.env.SHOPMONKEY_BASE_URL || 'https://api.shopmonkey.cloud/v3',
+    demoMode
+  });
+
   // Start Fastify server
   try {
     await fastify.listen({ port: webhookPort, host: '0.0.0.0' });
@@ -92,31 +110,53 @@ registerShopMonkeyWebhook(fastify, tenantId, {
     batchSize: 50
   });
 
-  // Set up touch point handler with both SMS and Email
+  // Set up touch point handler with whitelist gate
   touchPointProcessor.setTouchPointHandler(async (action: TouchPointAction) => {
-    console.log(`[TouchPoint] Sending touch point ${action.touchPointNumber} to ${action.customerName}`);
-    
+    const email = action.customerEmail;
+
+    console.log(
+      `[TouchPoint] Preparing touch point ${action.touchPointNumber} for lead ${action.leadId} (${action.customerName}), email=${email || '<none>'}`
+    );
+
+    // 🔐 HARD GATE: only proceed if email is whitelisted
+    if (!isWhitelistedEmail(email)) {
+      console.log(
+        `[TouchPoint] Email ${email || '<none>'} is NOT whitelisted; skipping all outbound for lead ${action.leadId} (marking as processed to avoid retry)`
+      );
+      // Treat as processed so this lead doesn't get picked up forever
+      return true;
+    }
+
     const chatLink = `https://chat.tintworld.com/${action.leadId}`;
-    const { subject, text, html } = generateEmailContent(action.touchPointNumber, action.customerName, chatLink);
-    const smsBody = generateSmsContent(action.touchPointNumber, action.customerName, chatLink);
+    const { subject, text, html } = generateEmailContent(
+      action.touchPointNumber,
+      action.customerName,
+      chatLink
+    );
+    const smsBody = generateSmsContent(
+      action.touchPointNumber,
+      action.customerName,
+      chatLink
+    );
 
     let emailSent = false;
     let smsSent = false;
 
-    // Send Email
-    if (action.customerEmail) {
+    // Send Email (whitelisted only)
+    if (email) {
       const emailResult = await sendGridService.sendEmail({
-        to: action.customerEmail,
+        to: email,
         subject,
         text,
         html
       });
       emailSent = emailResult.success;
     } else {
-      console.log(`[TouchPoint] No email for lead ${action.leadId}`);
+      console.log(`[TouchPoint] No email for lead ${action.leadId} (even though whitelist passed)`);
     }
 
-    // Send SMS (if configured and phone available)
+    // SMS: still allowed, but only for leads that passed the email whitelist gate above.
+    // If you want SMS fully disabled for MVP, comment this block out.
     if (twilioService && action.customerPhone) {
       const smsResult = await twilioService.sendSms({
         to: action.customerPhone,
@@ -168,7 +208,11 @@ function generateSmsContent(touchPointNumber: number, customerName: string | nul
     `Hi ${name}, following up on your Tint World quote. Let me know if you'd like to schedule! ${chatLink}`;
 }
 
-function generateEmailContent(touchPointNumber: number, customerName: string | null, chatLink: string): {
+function generateEmailContent(
+  touchPointNumber: number,
+  customerName: string | null,
+  chatLink: string
+): {
   subject: string;
   text: string;
   html: string;
