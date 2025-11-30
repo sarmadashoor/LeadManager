@@ -1,4 +1,4 @@
-import { db } from './src/infrastructure/persistence/db';
+import { db } from '../infrastructure/persistence/db';
 
 async function main() {
   const lead = await db('leads').select('id', 'customer_name', 'service_name').first();
